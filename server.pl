@@ -1,5 +1,5 @@
 % =========================================================
-% MODULO: server.pl (DASHBOARD WEB - DIORAMA 3D INTERATTIVO)
+% MODULO: server.pl (DASHBOARD WEB - TEXTURE 6K)
 % =========================================================
 
 :- module(server, [avvia_server/0, ferma_server/0, resetta_partita/0]).
@@ -15,11 +15,20 @@
 
 :- dynamic stato_corrente/1, ruolo_umano/1, ruolo_ai/1, stato_gioco/1.
 
+% --- ROTTE DEL SERVER ---
 :- http_handler(root(.), pagina_principale, []).
 :- http_handler(root(muovi), gestisci_mossa, []).
 :- http_handler(root(trigger_ai), esegui_mossa_ai, []).
 :- http_handler(root(reset), gestisci_reset, []).
+:- http_handler(root('tavolo.jpg'), servi_immagine_tavolo, []). % <--- NUOVA ROTTA PER LA TEXTURE 6K!
 
+
+servi_immagine_tavolo(Request) :-
+    module_property(server, file(PathServer)),
+    file_directory_name(PathServer, Dir),
+    directory_file_path(Dir, 'tavolo.jpg', PathImmagine),
+    % Abbiamo aggiunto unsafe(true) per dire a Prolog che questo file è sicuro da inviare!
+    http_reply_file(PathImmagine, [unsafe(true)], Request).
 avvia_server :-
     resetta_partita,
     http_server(http_dispatch, [port(8080)]),
@@ -42,66 +51,77 @@ resetta_partita :-
 gestisci_reset(_Request) :- resetta_partita, format('Content-type: text/plain~n~nok').
 
 pagina_principale(_Request) :-
-    stato_corrente(Pezzi), stato_gioco(StatoGioco),
+    stato_corrente(Pezzi), stato_gioco(StatoGioco), ruolo_umano(RuoloUmano),
     reply_html_page(
-        title('Hnefatafl - Diorama 3D'),
+        title('Hnefatafl - Diorama Vichingo Storico'),
         [
             style('
-                body { background-color: #15100a; color: #f5deb3; font-family: "Segoe UI", serif; text-align: center; user-select: none; background-image: radial-gradient(#2c1e16 2px, transparent 2px); background-size: 30px 30px; margin: 0; padding-top: 10px; overflow-x: hidden; }
-                @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
-                .banner-ai { background: linear-gradient(145deg, #3e2723, #1a120b); color: #ffd700; padding: 12px 30px; border-radius: 50px; width: fit-content; margin: 0 auto 15px auto; font-size: 18px; font-weight: bold; border: 1px solid #ffd700; animation: pulse 1.5s infinite; box-shadow: 0 10px 20px rgba(0,0,0,0.8); text-transform: uppercase; letter-spacing: 2px; }
-                .banner-win { background: linear-gradient(145deg, #556b2f, #2e3b19); color: white; padding: 15px 40px; border-radius: 8px; width: fit-content; margin: 0 auto 15px auto; font-size: 20px; font-weight: bold; border: 2px solid #ffd700; box-shadow: 0 10px 20px rgba(0,0,0,0.8); }
-                .banner-loss { background: linear-gradient(145deg, #8b0000, #4a0000); color: white; padding: 15px 40px; border-radius: 8px; width: fit-content; margin: 0 auto 15px auto; font-size: 20px; font-weight: bold; border: 2px solid #ffd700; box-shadow: 0 10px 20px rgba(0,0,0,0.8); }
-                .btn-reset { background-color: #1a1a1a; color: #8fbc8f; border: 1px solid #8fbc8f; padding: 6px 15px; border-radius: 4px; cursor: pointer; transition: 0.2s; margin-top: 5px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;}
-                .btn-reset:hover { background-color: #8fbc8f; color: #1a1a1a; box-shadow: 0 0 15px rgba(143, 188, 143, 0.5); }
+                /* Sfondo con la TUA Texture 6K */
+                body { 
+                    background-color: #1a1511; 
+                    background-image: url("/tavolo.jpg?v=2");                    background-size: cover;
+                    background-position: center;
+                    background-attachment: fixed;
+                    color: #e0d0b0; 
+                    font-family: "Segoe UI", serif; 
+                    text-align: center; 
+                    user-select: none; 
+                    margin: 0; padding-top: 10px; 
+                    overflow-x: hidden; 
+                }
+
+                .btn-reset { background-color: rgba(26, 21, 17, 0.7); color: #c4a47c; border: 1px solid #c4a47c; padding: 8px 20px; cursor: pointer; margin-top: 5px; font-family: "Georgia", serif; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; transition: all 0.2s; backdrop-filter: blur(4px); }
+                .btn-reset:hover { background-color: #c4a47c; color: #1a1511; }
                 
-                table { border-collapse: collapse; border: 18px solid #24140a; border-radius: 12px; box-shadow: 0px 30px 60px rgba(0,0,0,0.95), inset 0 0 40px rgba(0,0,0,0.9); margin: auto; background-color: #3e2723; }
-                .board-cell { width: 70px; height: 70px; text-align: center; vertical-align: middle; padding: 0; position: relative; border: 1px solid rgba(0,0,0,0.3); }
-                .board-cell.light { background-color: #a67c52; box-shadow: inset 0 3px 6px rgba(0,0,0,0.5); }
-                .board-cell.dark { background-color: #8b5a2b; box-shadow: inset 0 3px 6px rgba(0,0,0,0.6); }
-                .board-cell.throne { background-color: #2e3b19; box-shadow: inset 0 5px 15px rgba(0,0,0,0.8); }
-                .board-cell.corner { background-color: #2e3b19; box-shadow: inset 0 5px 15px rgba(0,0,0,0.8); }
-                .board-cell.corner::after { content: "ᚠ"; color: rgba(143,188,143,0.25); font-size: 40px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none;}
-                .board-cell.throne::after { content: "ᛝ"; color: rgba(169,169,169,0.3); font-size: 40px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none;}
-
-                /* Highlight mosse legali */
-                .valid-move { box-shadow: inset 0 0 25px rgba(0, 255, 204, 0.6) !important; cursor: pointer; }
-
-                /* Pedine Base */
-                .piece { width: 50px; height: 50px; border-radius: 50%; margin: 0 auto; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: bold; position: relative; z-index: 10; cursor: pointer; pointer-events: none; }
-                .board-cell > .piece { pointer-events: auto; } /* Solo i pezzi nella griglia prendono click */
+                table { border-collapse: collapse; border: 12px solid #2e1d10; border-radius: 4px; box-shadow: 0px 30px 70px rgba(0,0,0,0.95); margin: auto; background-color: #a47e57; background-image: url("https://www.transparenttextures.com/patterns/wood-pattern.png"); }
+                .board-cell { width: 70px; height: 70px; text-align: center; vertical-align: middle; padding: 0; position: relative; border: 1px solid rgba(46, 29, 16, 0.8); }
+                .board-cell.light { background-color: rgba(255,255,255,0.06); }
+                .board-cell.dark { background-color: rgba(0,0,0,0.12); }
+                .board-cell.throne { background-color: rgba(0,0,0,0.25); }
+                .board-cell.corner { background-color: rgba(0,0,0,0.25); }
+                .board-cell.corner::after { content: "ᛝ"; color: rgba(46, 29, 16, 0.5); font-size: 45px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+                .board-cell.throne::after { content: "ᛝ"; color: rgba(0, 0, 0, 0.4); font-size: 45px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; }
                 
-                .piece.attaccante { background: radial-gradient(circle at 35% 35%, #7a2020, #3a0000); box-shadow: 0 8px 0 #1a0000, 0 12px 10px rgba(0,0,0,0.7); color: #ffb3b3; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); transform: translateY(-4px); }
-                .piece.difensore { background: radial-gradient(circle at 35% 35%, #fffaf0, #d7ccc8); box-shadow: 0 8px 0 #8d6e63, 0 12px 10px rgba(0,0,0,0.7); color: #3e2723; text-shadow: 1px 1px 1px rgba(255,255,255,0.6); transform: translateY(-4px); }
-                .piece.re { width: 56px; height: 56px; font-size: 32px; background: radial-gradient(circle at 35% 35%, #ffd700, #b8860b); box-shadow: 0 12px 0 #6b4c06, 0 16px 15px rgba(0,0,0,0.8); color: #3e2723; transform: translateY(-6px); }
-
-                /* Fantasma Volante (Segue il mouse) */
-                .floating-ghost { position: absolute !important; z-index: 9999 !important; pointer-events: none !important; transition: left 0.1s linear, top 0.1s linear, transform 0.2s; transform: scale(1.2) translateY(-15px) !important; }
-                .floating-ghost.attaccante { box-shadow: 0 8px 0 #1a0000, 0 40px 20px rgba(0,0,0,0.5), 0 0 20px rgba(255,100,100,0.5) !important; }
-                .floating-ghost.difensore { box-shadow: 0 8px 0 #8d6e63, 0 40px 20px rgba(0,0,0,0.5), 0 0 20px rgba(255,255,255,0.5) !important; }
-                .floating-ghost.re { box-shadow: 0 12px 0 #6b4c06, 0 45px 25px rgba(0,0,0,0.5), 0 0 25px rgba(255,215,0,0.7) !important; }
-
-                .dropping { transform: translateY(0) scale(1) !important; box-shadow: 0 2px 0 rgba(0,0,0,0.5), 0 4px 5px rgba(0,0,0,0.8) !important; transition: all 0.2s ease-in !important; z-index: 10; }
+                .valid-move { box-shadow: inset 0 0 0 3px rgba(255, 215, 0, 0.5) !important; cursor: pointer; }
+                
+                .piece { width: 44px; height: 44px; border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: normal; position: relative; z-index: 10; cursor: pointer; pointer-events: none; border: 2px solid rgba(0,0,0,0.7); transition: all 0.15s ease-out; background-image: url("https://www.transparenttextures.com/patterns/retina-wood.png"); }
+                .board-cell > .piece { pointer-events: auto; }
+                
+                .piece.attaccante { background-color: #3b2214; color: #1a0f08; text-shadow: 1px 1px 0px rgba(255,255,255,0.1); box-shadow: inset 0 0 8px rgba(0,0,0,0.9), 0 5px 0 #140b06, 0 8px 6px rgba(0,0,0,0.8); transform: translateY(-4px); }
+                .piece.difensore { background-color: #d4c5b6; color: #4a3625; text-shadow: 1px 1px 0px rgba(255,255,255,0.6); box-shadow: inset 0 0 8px rgba(130,100,80,0.6), 0 5px 0 #7a6554, 0 8px 6px rgba(0,0,0,0.8); transform: translateY(-4px); }
+                .piece.re { width: 50px; height: 50px; font-size: 28px; background-color: #cfa144; color: #3b280b; text-shadow: 1px 1px 0px rgba(255,255,255,0.4); box-shadow: inset 0 0 10px rgba(120,70,10,0.7), 0 7px 0 #78561b, 0 10px 8px rgba(0,0,0,0.9); transform: translateY(-6px); }
+                
+                .floating-ghost { position: absolute !important; z-index: 9999 !important; pointer-events: none !important; transition: left 0.1s linear, top 0.1s linear, transform 0.15s; transform: scale(1.1) translateY(-15px) !important; }
+                .floating-ghost.attaccante { box-shadow: inset 0 0 8px rgba(0,0,0,0.9), 0 5px 0 #140b06, 0 25px 15px rgba(0,0,0,0.6) !important; }
+                .floating-ghost.difensore { box-shadow: inset 0 0 8px rgba(130,100,80,0.6), 0 5px 0 #7a6554, 0 25px 15px rgba(0,0,0,0.6) !important; }
+                .floating-ghost.re { box-shadow: inset 0 0 10px rgba(120,70,10,0.7), 0 7px 0 #78561b, 0 30px 20px rgba(0,0,0,0.6) !important; }
+                
+                .dropping { transform: translateY(0) scale(1) !important; box-shadow: 0 1px 0 rgba(0,0,0,0.8), 0 2px 3px rgba(0,0,0,0.8) !important; transition: all 0.1s ease-in !important; z-index: 10; }
+                
+                .banner-ai { color: #d4a348; padding: 10px; font-size: 16px; font-family: "Georgia", serif; font-style: italic; letter-spacing: 1px; background-color: rgba(26, 21, 17, 0.7); border-radius: 4px; width: fit-content; margin: 0 auto 15px auto; backdrop-filter: blur(4px); }
+                .banner-win { background-color: rgba(74, 99, 17, 0.9); color: white; padding: 15px 40px; border-radius: 4px; width: fit-content; margin: 0 auto 15px auto; font-size: 20px; font-weight: bold; box-shadow: 0 10px 20px rgba(0,0,0,0.8); backdrop-filter: blur(4px); }
+                .banner-loss { background-color: rgba(107, 0, 0, 0.9); color: white; padding: 15px 40px; border-radius: 4px; width: fit-content; margin: 0 auto 15px auto; font-size: 20px; font-weight: bold; box-shadow: 0 10px 20px rgba(0,0,0,0.8); backdrop-filter: blur(4px); }
             '),
-            h1([style('margin-top: 15px; letter-spacing: 3px; margin-bottom: 5px; text-shadow: 2px 2px 4px #000;')], 'HNEFATAFL ᛟ TABLUT'),
-            button([class('btn-reset'), onclick('fetch("/reset").then(()=>window.location.reload())')], 'Ricomincia Partita'),
-            div([style('height: 15px;')], ''),
+            h1([style('margin-top: 15px; letter-spacing: 4px; margin-bottom: 5px; font-family: "Georgia", serif; color: #d1bfae; font-weight: normal; text-shadow: 2px 2px 5px #000;')], 'HNEFATAFL'),
+            button([class('btn-reset'), onclick('fetch("/reset").then(()=>window.location.href = "/?t=" + Date.now())')], 'Nuova Battaglia'),
+            div([style('height: 20px;')], ''),
             \banner_stato(StatoGioco),
             div([style('display: flex; justify-content: center; padding-bottom: 40px;')], \renderizza_scacchiera(Pezzi)),
-            \script_javascript(StatoGioco)
+            \script_javascript(StatoGioco, RuoloUmano)
         ]
     ).
 
-banner_stato(calcolo_ai) --> html(div([class('banner-ai')], '⏳ Il Nemico sta studiando le Rune...')).
-banner_stato(vittoria_attaccante) --> html(div([class('banner-loss')], '💀 VITTORIA! I Rossi hanno schiacciato il Re!')).
-banner_stato(vittoria_difensore) --> html(div([class('banner-win')], '👑 VITTORIA! Il Re Bianco è fuggito!')).
+banner_stato(calcolo_ai) --> html(div([class('banner-ai')], '... Il Nemico sta riflettendo ...')).
+banner_stato(vittoria_attaccante) --> html(div([class('banner-loss')], 'VITTORIA! I Rossi hanno schiacciato il Re!')).
+banner_stato(vittoria_difensore) --> html(div([class('banner-win')], 'VITTORIA! Il Re Bianco e fuggito!')).
 banner_stato(_) --> html(div([style('height: 48px; margin-bottom: 15px;')], '')).
 
-% --- JAVASCRIPT FRONTEND ANIMATO ---
-script_javascript(StatoGioco) -->
-    { format(string(StatoStr), "~w", [StatoGioco]) },
+script_javascript(StatoGioco, RuoloUmano) -->
+    { format(string(StatoStr), "~w", [StatoGioco]),
+      format(string(RuoloStr), "~w", [RuoloUmano]) },
     html(script(type('text/javascript'), [
         'let statoGioco = "', StatoStr, '";\n',
+        'let ruoloUmano = "', RuoloStr, '";\n',
         'let selX = null, selY = null;\n',
         'let ghostPiece = null;\n',
         'let validMoves = [];\n',
@@ -115,8 +135,12 @@ script_javascript(StatoGioco) -->
         '        while(cx >= 1 && cx <= 9 && cy >= 1 && cy <= 9) {\n',
         '            let cell = document.getElementById("c_" + cx + "_" + cy);\n',
         '            if (cell.querySelector(".piece")) break; \n',
-        '            if (!isKing && (cell.classList.contains("corner") || cell.classList.contains("throne"))) break; \n',
-        '            valid.push(cx + "_" + cy);\n',
+        '            let isRestricted = cell.classList.contains("corner") || cell.classList.contains("throne");\n',
+        '            if (!isKing && isRestricted) {\n',
+        '                /* Puo passare SOPRA il trono vuoto, ma non fermarsi! */\n',
+        '            } else {\n',
+        '                valid.push(cx + "_" + cy);\n',
+        '            }\n',
         '            cx += d[0]; cy += d[1];\n',
         '        }\n',
         '    }\n',
@@ -128,11 +152,11 @@ script_javascript(StatoGioco) -->
         '        let hovered = document.elementFromPoint(e.clientX, e.clientY);\n',
         '        if (hovered && hovered.tagName === "TD" && hovered.classList.contains("valid-move")) {\n',
         '            let rect = hovered.getBoundingClientRect();\n',
-        '            let offset = isKing ? 28 : 25;\n',
+        '            let offset = isKing ? 25 : 22;\n',
         '            ghostPiece.style.left = (rect.left + rect.width/2 - offset) + "px";\n',
         '            ghostPiece.style.top = (rect.top + rect.height/2 - offset - 15) + "px";\n',
         '        } else {\n',
-        '            let offset = isKing ? 28 : 25;\n',
+        '            let offset = isKing ? 25 : 22;\n',
         '            ghostPiece.style.left = (e.pageX - offset) + "px";\n',
         '            ghostPiece.style.top = (e.pageY - offset - 15) + "px";\n',
         '        }\n',
@@ -146,6 +170,14 @@ script_javascript(StatoGioco) -->
 
         '    if (selX === null) {\n',
         '        if (piece) {\n',
+        '            let isAtt = piece.classList.contains("attaccante");\n',
+        '            let isDif = piece.classList.contains("difensore") || piece.classList.contains("re");\n',
+        '            let fazionePezzo = isAtt ? "attaccante" : (isDif ? "difensore" : "sconosciuto");\n',
+        '            if (ruoloUmano !== "sconosciuto" && fazionePezzo !== ruoloUmano) {\n',
+        '                cell.style.backgroundColor = "rgba(255, 76, 76, 0.4)";\n',
+        '                setTimeout(() => { cell.style.backgroundColor = ""; }, 300);\n',
+        '                return;\n',
+        '            }\n',
         '            selX = x; selY = y;\n',
         '            isKing = piece.classList.contains("re");\n',
         '            validMoves = getValidMoves(x, y);\n',
@@ -154,10 +186,10 @@ script_javascript(StatoGioco) -->
         '            ghostPiece = piece.cloneNode(true);\n',
         '            ghostPiece.classList.add("floating-ghost");\n',
         '            document.body.appendChild(ghostPiece);\n',
-        '            let offset = isKing ? 28 : 25;\n',
+        '            let offset = isKing ? 25 : 22;\n',
         '            ghostPiece.style.left = (event.pageX - offset) + "px";\n',
         '            ghostPiece.style.top = (event.pageY - offset - 15) + "px";\n',
-        '            piece.style.opacity = "0"; /* Nasconde totalmente l\'originale */\n',
+        '            piece.style.opacity = "0";\n',
         '        }\n',
         '    } else {\n',
         '        let targetId = x + "_" + y;\n',
@@ -175,7 +207,6 @@ script_javascript(StatoGioco) -->
         '        if (validMoves.includes(targetId)) {\n',
         '            let fx = selX; let fy = selY; selX = null; selY = null;\n',
         '            \n',
-        '            /* FIX: Sposta e mostra subito il vero pezzo nella nuova cella! */\n',
         '            if(ghostPiece) ghostPiece.remove();\n',
         '            ghostPiece = null;\n',
         '            oldP.style.opacity = "1";\n',
@@ -186,11 +217,16 @@ script_javascript(StatoGioco) -->
         '            fetch("/muovi?fx=" + fx + "&fy=" + fy + "&tx=" + x + "&ty=" + y)\n',
         '            .then(r => r.text()).then(res => {\n',
         '                if (res === "ok") {\n',
-        '                    setTimeout(() => { window.location.reload(); }, 200);\n',
-        '                } else { window.location.reload(); }\n',
-        '            });\n',
+        '                    window.location.href = "/?t=" + Date.now();\n',
+        '                } else {\n',
+        '                    oldCell.appendChild(oldP);\n',
+        '                    oldP.classList.remove("dropping");\n',
+        '                    cell.style.backgroundColor = "rgba(255, 76, 76, 0.4)";\n',
+        '                    setTimeout(() => { cell.style.backgroundColor = ""; }, 300);\n',
+        '                }\n',
+        '            }).catch(() => { window.location.href = "/?t=" + Date.now(); });\n',
         '        } else {\n',
-        '            cell.style.backgroundColor = "#ff4c4c";\n',
+        '            cell.style.backgroundColor = "rgba(255, 76, 76, 0.4)";\n',
         '            setTimeout(() => { cell.style.backgroundColor = ""; }, 300);\n',
         '            if(ghostPiece) ghostPiece.remove();\n',
         '            ghostPiece = null; oldP.style.opacity = "1";\n',
@@ -201,7 +237,7 @@ script_javascript(StatoGioco) -->
 
         'if (statoGioco === "calcolo_ai") {\n',
         '    setTimeout(() => {\n',
-        '        fetch("/trigger_ai").then(response => response.text()).then(res => { window.location.reload(); });\n',
+        '        fetch("/trigger_ai").then(response => response.text()).then(res => { window.location.href = "/?t=" + Date.now(); });\n',
         '    }, 300);\n',
         '}\n'
     ])).
