@@ -1,20 +1,24 @@
 % =========================================================
-% MODULO: ai.pl (Intelligenza Artificiale Bulletproof)
+% MODULO: ai.pl (Intelligenza Artificiale Imprevedibile)
 % =========================================================
 
-:- module(ai, [calcola_mossa_ai/4]). % Nota: usa il nome modulo corretto in base al nome del tuo file!
+:- module(ai, [calcola_mossa_ai/4]).
 :- use_module(engine).
 :- use_module(kb).
+:- use_module(library(random)). % <--- AGGIUNTA LA LIBRERIA RANDOM!
 
 calcola_mossa_ai(Pezzi, FazioneAI, Profondita, MossaScelta) :-
-    % 1. Trova tutti i figli
+    % 1. Trova tutte le mosse legali possibili
     findall(mossa(FX, FY, TX, TY, NuoviPezzi), genera_mossa_valida(Pezzi, FazioneAI, FX, FY, TX, TY, NuoviPezzi), MossePossibili),
-    MossePossibili \= [], % Sicurezza: deve esserci almeno una mossa
+    MossePossibili \= [], % Sicurezza
     
-    % 2. Valuta i rami
-    valuta_tutte_mosse(MossePossibili, FazioneAI, Profondita, MosseValutate),
+    % 2. MISCHIAMO LE MOSSE! (Il trucco per rendere l'AI non ripetitiva)
+    random_permutation(MossePossibili, MosseMischiate),
     
-    % 3. Ordina in modo classico (sicuro al 100%)
+    % 3. Valuta i rami (ora in ordine casuale)
+    valuta_tutte_mosse(MosseMischiate, FazioneAI, Profondita, MosseValutate),
+    
+    % 4. Ordina in base al punteggio (keysort preserva l'ordine casuale in caso di parità!)
     keysort(MosseValutate, Ascendente),
     reverse(Ascendente, [_MigliorPunteggio-MossaScelta | _]).
 
@@ -31,7 +35,7 @@ minimax(Pezzi, 0, FazioneAI, _, Punteggio) :- !, euristica(Pezzi, FazioneAI, Pun
 minimax(Pezzi, Profondita, FazioneAI, true, PunteggioMassimo) :-
     Profondita > 0,
     findall(mossa(FX, FY, TX, TY, NP), genera_mossa_valida(Pezzi, FazioneAI, FX, FY, TX, TY, NP), Figli),
-    ( Figli = [] -> PunteggioMassimo = -10000 % Se non ha mosse, ha perso
+    ( Figli = [] -> PunteggioMassimo = -10000 
     ; NuovaProf is Profondita - 1,
       valuta_figli(Figli, FazioneAI, NuovaProf, false, PunteggiFigli),
       max_list(PunteggiFigli, PunteggioMassimo)
@@ -41,7 +45,7 @@ minimax(Pezzi, Profondita, FazioneAI, false, PunteggioMinimo) :-
     Profondita > 0,
     avversario(FazioneAI, Avversario),
     findall(mossa(FX, FY, TX, TY, NP), genera_mossa_valida(Pezzi, Avversario, FX, FY, TX, TY, NP), Figli),
-    ( Figli = [] -> PunteggioMinimo = 10000 % Se l'avversario non ha mosse, abbiamo vinto
+    ( Figli = [] -> PunteggioMinimo = 10000 
     ; NuovaProf is Profondita - 1,
       valuta_figli(Figli, FazioneAI, NuovaProf, true, PunteggiFigli),
       min_list(PunteggiFigli, PunteggioMinimo)
@@ -52,13 +56,13 @@ valuta_figli([mossa(_, _, _, _, NP) | Resto], FazioneAI, Prof, TurnoAI, [P | Res
     minimax(NP, Prof, FazioneAI, TurnoAI, P),
     valuta_figli(Resto, FazioneAI, Prof, TurnoAI, RestoP).
 
-% --- EURISTICA (Semplificata e Sicura) ---
+% --- EURISTICA ---
 euristica(Pezzi, attaccante, Punteggio) :-
     findall(1, member(pezzo(_, attaccante, _, _), Pezzi), LAtt), length(LAtt, NumAtt),
     findall(1, member(pezzo(_, difensore, _, _), Pezzi), LDif), length(LDif, NumDif),
     ( member(pezzo(re, difensore, RX, RY), Pezzi) ->
         DistanzaCentro is abs(RX - 5) + abs(RY - 5)
-    ; DistanzaCentro = 10 % Re mangiato!
+    ; DistanzaCentro = 10 
     ),
     PunteggioBase is (NumAtt * 10) - (NumDif * 15),
     Punteggio is PunteggioBase - (DistanzaCentro * 5).
@@ -68,7 +72,7 @@ euristica(Pezzi, difensore, Punteggio) :-
     findall(1, member(pezzo(_, attaccante, _, _), Pezzi), LAtt), length(LAtt, NumAtt),
     ( member(pezzo(re, difensore, RX, RY), Pezzi) ->
         DistanzaCentro is abs(RX - 5) + abs(RY - 5)
-    ; DistanzaCentro = -10 % Re mangiato (Disastro)
+    ; DistanzaCentro = -10 
     ),
     PunteggioBase is (NumDif * 15) - (NumAtt * 10),
     Punteggio is PunteggioBase + (DistanzaCentro * 10).
