@@ -1,5 +1,5 @@
 % =========================================================
-% MODULO: server.pl (DASHBOARD WEB - TEXTURE 6K)
+% MODULO: server.pl (DASHBOARD WEB - TEXTURE FOTOREALISTICHE)
 % =========================================================
 
 :- module(server, [avvia_server/0, ferma_server/0, resetta_partita/0]).
@@ -20,15 +20,47 @@
 :- http_handler(root(muovi), gestisci_mossa, []).
 :- http_handler(root(trigger_ai), esegui_mossa_ai, []).
 :- http_handler(root(reset), gestisci_reset, []).
-:- http_handler(root('tavolo.jpg'), servi_immagine_tavolo, []). % <--- NUOVA ROTTA PER LA TEXTURE 6K!
 
+% ROTTE IMMAGINI
+:- http_handler(root('tavolo.jpg'), servi_immagine_tavolo, []).
+:- http_handler(root('wooden-warm-texture.jpg'), servi_texture_calda, []).
+:- http_handler(root('wooden-textured-background.jpg'), servi_texture_scura, []).
+:- http_handler(root('stone-shells-fossil-texture.jpg'), servi_texture_bianca, []).
+:- http_handler(root('black-creased-textured-wall-background.jpg'), servi_texture_nera, []).
+:- http_handler(root('yellow-wall-texture-with-scratches.jpg'), servi_texture_re, []).
 
+% --- GESTIONE INVIO FILE IMMAGINE ---
 servi_immagine_tavolo(Request) :-
-    module_property(server, file(PathServer)),
-    file_directory_name(PathServer, Dir),
+    module_property(server, file(PathServer)), file_directory_name(PathServer, Dir),
     directory_file_path(Dir, 'tavolo.jpg', PathImmagine),
-    % Abbiamo aggiunto unsafe(true) per dire a Prolog che questo file è sicuro da inviare!
     http_reply_file(PathImmagine, [unsafe(true)], Request).
+
+servi_texture_calda(Request) :-
+    module_property(server, file(PathServer)), file_directory_name(PathServer, Dir),
+    directory_file_path(Dir, 'wooden-warm-texture.jpg', PathImmagine),
+    http_reply_file(PathImmagine, [unsafe(true)], Request).
+
+servi_texture_scura(Request) :-
+    module_property(server, file(PathServer)), file_directory_name(PathServer, Dir),
+    directory_file_path(Dir, 'wooden-textured-background.jpg', PathImmagine),
+    http_reply_file(PathImmagine, [unsafe(true)], Request).
+
+servi_texture_bianca(Request) :-
+    module_property(server, file(PathServer)), file_directory_name(PathServer, Dir),
+    directory_file_path(Dir, 'stone-shells-fossil-texture.jpg', PathImmagine),
+    http_reply_file(PathImmagine, [unsafe(true)], Request).
+
+servi_texture_nera(Request) :-
+    module_property(server, file(PathServer)), file_directory_name(PathServer, Dir),
+    directory_file_path(Dir, 'black-creased-textured-wall-background.jpg', PathImmagine),
+    http_reply_file(PathImmagine, [unsafe(true)], Request).
+
+servi_texture_re(Request) :-
+    module_property(server, file(PathServer)), file_directory_name(PathServer, Dir),
+    directory_file_path(Dir, 'yellow-wall-texture-with-scratches.jpg', PathImmagine),
+    http_reply_file(PathImmagine, [unsafe(true)], Request).
+
+% --- COMANDI SERVER ---
 avvia_server :-
     resetta_partita,
     http_server(http_dispatch, [port(8080)]),
@@ -50,16 +82,17 @@ resetta_partita :-
 
 gestisci_reset(_Request) :- resetta_partita, format('Content-type: text/plain~n~nok').
 
+% --- INTERFACCIA WEB ---
 pagina_principale(_Request) :-
     stato_corrente(Pezzi), stato_gioco(StatoGioco), ruolo_umano(RuoloUmano),
     reply_html_page(
         title('Hnefatafl - Diorama Vichingo Storico'),
         [
             style('
-                /* SFONDO DEL TAVOLO (La tua texture 6K) */
+                /* SFONDO DEL TAVOLO */
                 body { 
                     background-color: #1a1511; 
-                    background-image: url("/tavolo.jpg?v=2"); 
+                    background-image: url("/tavolo.jpg?v=5"); 
                     background-size: cover; background-position: center; background-attachment: fixed;
                     color: #e0d0b0; font-family: "Segoe UI", serif; text-align: center; user-select: none; margin: 0; padding-top: 10px; overflow-x: hidden; 
                 }
@@ -68,58 +101,39 @@ pagina_principale(_Request) :-
                 .btn-reset:hover { background-color: #c4a47c; color: #1a1511; }
                 
                 /* ===================================================
-                   LA PLANCIA: Rovere invecchiato scolpito in 3D
+                   LA PLANCIA DI GIOCO
                 =================================================== */
                 table { 
                     border-collapse: collapse; margin: auto; 
-                    
-                    /* Bordo massiccio di legno scuro */
-                    border: 24px solid #2e1d14; 
+                    border: 24px solid #1a100a; 
                     border-radius: 8px; 
+                    box-shadow: 0px 40px 80px rgba(0,0,0,0.9), inset 0 0 40px rgba(0,0,0,0.8); 
                     
-                    /* Ombre per farla staccare dal tavolo e ombra interna per profondità */
-                    box-shadow: 0px 40px 80px rgba(0,0,0,0.9), inset 0 0 30px rgba(0,0,0,0.7); 
-                    
-                    /* Materiale: Texture legno + Gradiente radiale (chiaro al centro, scuro ai bordi) */
-                    background-color: #5c3e26;
-                    background-image: url("https://www.transparenttextures.com/patterns/wood-pattern.png"), 
-                                      radial-gradient(circle, rgba(138,90,50,0.4) 0%, rgba(46,26,12,0.9) 100%);
+                    /* TEXTURE LEGNO DELLA SCACCHIERA */
+                    background-image: url("/wooden-textured-background.jpg?v=5");
+                    background-size: cover;
+                    background-position: center;
                 }
                 
-                /* Le celle 9x9 */
                 .board-cell { 
                     width: 72px; height: 72px; 
                     text-align: center; vertical-align: middle; padding: 0; position: relative; 
-                    /* Incisione a fuoco per la griglia */
-                    border: 2px solid rgba(25, 12, 5, 0.6); 
+                    border: 2px solid rgba(15, 5, 0, 0.8); 
                 }
                 
-                /* Alternanza tenue stile scacchiera */
-                .board-cell.light { background-color: rgba(255,255,255,0.02); }
-                .board-cell.dark { background-color: rgba(0,0,0,0.1); }
+                .board-cell.light { background-color: rgba(255,255,255,0.03); }
+                .board-cell.dark { background-color: rgba(0,0,0,0.70); }
                 
-                /* Caselle Speciali (Trono e Angoli) -> Effetto SCAVATO nel legno */
-                .board-cell.throne { 
-                    background-color: rgba(15, 5, 0, 0.25); 
-                    box-shadow: inset 0 0 20px rgba(0,0,0,0.7); 
-                }
-                .board-cell.corner { 
-                    background-color: rgba(15, 5, 0, 0.35); 
-                    box-shadow: inset 0 0 25px rgba(0,0,0,0.8); 
-                }
+                .board-cell.throne { background-color: rgba(0, 0, 0, 0.5); box-shadow: inset 0 0 20px rgba(0,0,0,0.9); }
+                .board-cell.corner { background-color: rgba(0, 0, 0, 0.6); box-shadow: inset 0 0 25px rgba(0,0,0,0.9); }
                 
-                /* Rune marchiate a fuoco nel legno */
-                .board-cell.corner::after { content: "ᛝ"; color: rgba(20, 10, 5, 0.7); font-size: 50px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; text-shadow: 0px 1px 1px rgba(255,255,255,0.1); }
-                .board-cell.throne::after { content: "ᛝ"; color: rgba(20, 10, 5, 0.5); font-size: 50px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; text-shadow: 0px 1px 1px rgba(255,255,255,0.1); }
+                .board-cell.corner::after { content: "ᛝ"; color: rgba(200, 150, 100, 0.3); font-size: 50px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+                .board-cell.throne::after { content: "ᛝ"; color: rgba(200, 150, 100, 0.2); font-size: 50px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; }
                 
-                /* Selezione della mossa (Oro brillante) */
-                .valid-move { 
-                    box-shadow: inset 0 0 0 4px rgba(255, 200, 0, 0.6), inset 0 0 15px rgba(255,200,0,0.3) !important; 
-                    cursor: pointer; 
-                }
+                .valid-move { box-shadow: inset 0 0 0 4px rgba(255, 200, 0, 0.6), inset 0 0 15px rgba(255,200,0,0.3) !important; cursor: pointer; }
                 
                 /* ===================================================
-                   LE PEDINE: Ossidiana Lucida e Osso Intagliato
+                   LE PEDINE
                 =================================================== */
                 .piece { 
                     width: 48px; height: 48px; border-radius: 50%; margin: 0 auto; 
@@ -129,41 +143,47 @@ pagina_principale(_Request) :-
                 }
                 .board-cell > .piece { pointer-events: auto; }
                 
-                /* PIETRA NERA LUCIDA (Attaccanti - Jötunn) */
+                /* PIETRA NERA RUVIDA (Attaccanti - Jötunn) */
                 .piece.attaccante { 
-                    background: radial-gradient(circle at 30% 30%, #4a4a4a, #111111 60%, #000000); 
+                    background-color: #111111; 
+                    background-image: url("/black-creased-textured-wall-background.jpg?v=5");
+                    background-size: cover; background-position: center;
                     color: #ffffff; text-shadow: 0 0 4px rgba(255,255,255,0.8); border: 1px solid #000000;
-                    box-shadow: inset -2px -3px 6px rgba(0,0,0,0.9), inset 2px 2px 5px rgba(255,255,255,0.5), 0 5px 0 #050505, 0 8px 6px rgba(0,0,0,0.9); 
+                    box-shadow: inset -2px -3px 6px rgba(0,0,0,0.9), inset 2px 2px 5px rgba(255,255,255,0.2), 0 5px 0 #050505, 0 8px 6px rgba(0,0,0,0.9); 
                     transform: translateY(-3px); 
                 }
                 
-                /* OSSO VISSUTO (Difensori - Einherjar) */
+                /* PIETRA FOSSILE / OSSO (Difensori - Einherjar) */
                 .piece.difensore { 
-                    background-color: #e3d5c8;
-                    background-image: url("https://www.transparenttextures.com/patterns/dust.png"), radial-gradient(circle at 30% 30%, #ffffff, #e3d5c8 60%, #b8a695);
+                    background-color: #e3d5c8; 
+                    background-image: url("/stone-shells-fossil-texture.jpg?v=5");
+                    background-size: cover; background-position: center;
                     color: #111111; text-shadow: 1px 1px 0px rgba(255,255,255,0.8); border: 1px solid #8c7b6b;
-                    box-shadow: inset -2px -3px 6px rgba(100,80,60,0.4), inset 2px 2px 4px rgba(255,255,255,0.9), 0 5px 0 #9c8a79, 0 8px 6px rgba(0,0,0,0.8); 
+                    box-shadow: inset -2px -3px 6px rgba(100,80,60,0.4), inset 2px 2px 4px rgba(255,255,255,0.6), 0 5px 0 #9c8a79, 0 8px 6px rgba(0,0,0,0.8); 
                     transform: translateY(-3px); 
                 }
                 
-                /* IL RE (Odino) - Oro Antico / Ambra */
+                /* IL RE (Odino) - Oro Antico Martellato */
                 .piece.re { 
                     width: 56px; height: 56px; font-size: 32px; 
-                    background: radial-gradient(circle at 30% 30%, #fcd462, #cfa144 60%, #8a651f);
-                    color: #ffffff; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); border: 1px solid #5c4112;
-                    box-shadow: inset -2px -3px 6px rgba(100,50,0,0.6), inset 2px 2px 5px rgba(255,255,255,0.8), 0 5px 0 #78561b, 0 10px 8px rgba(0,0,0,0.9); 
+                    background-color: #d4af37; 
+                    background-image: url("/yellow-wall-texture-with-scratches.jpg?v=5");
+                    background-size: cover; background-position: center;
+                    color: #ffffff; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); border: 1px solid #5c4112;
+                    box-shadow: inset -3px -4px 8px rgba(0,0,0,0.6), inset 3px 3px 6px rgba(255,255,255,0.7), 0 6px 0 #8a651f, 0 12px 10px rgba(0,0,0,0.9); 
                     transform: translateY(-4px); 
                 }
                 
-                /* Animazioni di sollevamento per lo snap (Ghost) */
+                /* ===================================================
+                   ANIMAZIONI E INTERFACCIA
+                =================================================== */
                 .floating-ghost { position: absolute !important; z-index: 9999 !important; pointer-events: none !important; transition: left 0.1s linear, top 0.1s linear, transform 0.15s; transform: scale(1.1) translateY(-15px) !important; }
-                .floating-ghost.attaccante { box-shadow: inset -2px -3px 6px rgba(0,0,0,0.9), inset 2px 2px 5px rgba(255,255,255,0.5), 0 5px 0 #050505, 0 25px 15px rgba(0,0,0,0.6) !important; }
-                .floating-ghost.difensore { box-shadow: inset -2px -3px 6px rgba(100,80,60,0.4), inset 2px 2px 4px rgba(255,255,255,0.9), 0 5px 0 #9c8a79, 0 25px 15px rgba(0,0,0,0.6) !important; }
-                .floating-ghost.re { box-shadow: inset -2px -3px 6px rgba(100,50,0,0.6), inset 2px 2px 5px rgba(255,255,255,0.8), 0 5px 0 #78561b, 0 30px 20px rgba(0,0,0,0.6) !important; }
+                .floating-ghost.attaccante { box-shadow: inset -2px -3px 6px rgba(0,0,0,0.9), inset 2px 2px 5px rgba(255,255,255,0.2), 0 5px 0 #050505, 0 25px 15px rgba(0,0,0,0.6) !important; }
+                .floating-ghost.difensore { box-shadow: inset -2px -3px 6px rgba(100,80,60,0.4), inset 2px 2px 4px rgba(255,255,255,0.6), 0 5px 0 #9c8a79, 0 25px 15px rgba(0,0,0,0.6) !important; }
+                .floating-ghost.re { box-shadow: inset -3px -4px 8px rgba(0,0,0,0.6), inset 3px 3px 6px rgba(255,255,255,0.7), 0 6px 0 #8a651f, 0 30px 20px rgba(0,0,0,0.6) !important; }
                 
                 .dropping { transform: translateY(0) scale(1) !important; box-shadow: 0 1px 0 rgba(0,0,0,0.8), 0 2px 3px rgba(0,0,0,0.8) !important; transition: all 0.1s ease-in !important; z-index: 10; }
                 
-                /* Stili per le scritte in alto (Banner) */
                 .banner-ai, .banner-win, .banner-loss { padding: 10px 30px; border-radius: 4px; width: fit-content; margin: 0 auto 15px auto; font-family: "Georgia", serif; backdrop-filter: blur(4px); }
                 .banner-ai { color: #d4a348; font-style: italic; background-color: rgba(26, 21, 17, 0.7); }
                 .banner-win { background-color: rgba(74, 99, 17, 0.9); color: white; font-size: 20px; font-weight: bold; }
@@ -173,8 +193,6 @@ pagina_principale(_Request) :-
             button([class('btn-reset'), onclick('fetch("/reset").then(()=>window.location.href = "/?t=" + Date.now())')], 'Nuova Battaglia'),
             div([style('height: 20px;')], ''),
             \banner_stato(StatoGioco),
-            
-            /* LA TABELLA 9x9 CSS (Niente più foto per la scacchiera) */
             div([style('display: flex; justify-content: center; padding-bottom: 40px;')], \renderizza_scacchiera(Pezzi)),
             \script_javascript(StatoGioco, RuoloUmano)
         ]
@@ -206,7 +224,7 @@ script_javascript(StatoGioco, RuoloUmano) -->
         '            if (cell.querySelector(".piece")) break; \n',
         '            let isRestricted = cell.classList.contains("corner") || cell.classList.contains("throne");\n',
         '            if (!isKing && isRestricted) {\n',
-        '                /* Puo passare SOPRA il trono vuoto, ma non fermarsi! */\n',
+        '                /* Il pezzo normale puo passare sopra al trono, ma l\'engine blocca lo stop */\n',
         '            } else {\n',
         '                valid.push(cx + "_" + cy);\n',
         '            }\n',
@@ -221,11 +239,11 @@ script_javascript(StatoGioco, RuoloUmano) -->
         '        let hovered = document.elementFromPoint(e.clientX, e.clientY);\n',
         '        if (hovered && hovered.tagName === "TD" && hovered.classList.contains("valid-move")) {\n',
         '            let rect = hovered.getBoundingClientRect();\n',
-        '            let offset = isKing ? 25 : 22;\n',
+        '            let offset = isKing ? 28 : 24;\n',
         '            ghostPiece.style.left = (rect.left + rect.width/2 - offset) + "px";\n',
         '            ghostPiece.style.top = (rect.top + rect.height/2 - offset - 15) + "px";\n',
         '        } else {\n',
-        '            let offset = isKing ? 25 : 22;\n',
+        '            let offset = isKing ? 28 : 24;\n',
         '            ghostPiece.style.left = (e.pageX - offset) + "px";\n',
         '            ghostPiece.style.top = (e.pageY - offset - 15) + "px";\n',
         '        }\n',
@@ -255,7 +273,7 @@ script_javascript(StatoGioco, RuoloUmano) -->
         '            ghostPiece = piece.cloneNode(true);\n',
         '            ghostPiece.classList.add("floating-ghost");\n',
         '            document.body.appendChild(ghostPiece);\n',
-        '            let offset = isKing ? 25 : 22;\n',
+        '            let offset = isKing ? 28 : 24;\n',
         '            ghostPiece.style.left = (event.pageX - offset) + "px";\n',
         '            ghostPiece.style.top = (event.pageY - offset - 15) + "px";\n',
         '            piece.style.opacity = "0";\n',
