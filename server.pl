@@ -13,7 +13,8 @@
 :- use_module(engine).
 :- use_module(ai).
 
-:- dynamic stato_corrente/1, ruolo_umano/1, ruolo_ai/1, stato_gioco/1.
+% AGGIUNTO 'turno_attuale/1' ALLA MEMORIA DINAMICA
+:- dynamic stato_corrente/1, ruolo_umano/1, ruolo_ai/1, stato_gioco/1, turno_attuale/1.
 
 % --- ROTTE DEL SERVER ---
 :- http_handler(root(.), pagina_principale, []).
@@ -78,13 +79,15 @@ resetta_partita :-
     retractall(stato_corrente(_)), assertz(stato_corrente(Pezzi)),
     retractall(ruolo_umano(_)),    assertz(ruolo_umano(sconosciuto)),
     retractall(ruolo_ai(_)),       assertz(ruolo_ai(sconosciuto)),
-    retractall(stato_gioco(_)),    assertz(stato_gioco(turno_umano)).
+    retractall(stato_gioco(_)),    assertz(stato_gioco(turno_umano)),
+    % INIZIALIZZAZIONE TURNO: L'Attaccante (Nero) gioca sempre per primo
+    retractall(turno_attuale(_)),  assertz(turno_attuale(attaccante)).
 
 gestisci_reset(_Request) :- resetta_partita, format('Content-type: text/plain~n~nok').
 
 % --- INTERFACCIA WEB ---
 pagina_principale(_Request) :-
-    stato_corrente(Pezzi), stato_gioco(StatoGioco), ruolo_umano(RuoloUmano),
+    stato_corrente(Pezzi), stato_gioco(StatoGioco), ruolo_umano(RuoloUmano), turno_attuale(Turno),
     reply_html_page(
         title('Hnefatafl - Diorama Vichingo Storico'),
         [
@@ -194,7 +197,8 @@ pagina_principale(_Request) :-
             div([style('height: 20px;')], ''),
             \banner_stato(StatoGioco),
             div([style('display: flex; justify-content: center; padding-bottom: 40px;')], \renderizza_scacchiera(Pezzi)),
-            \script_javascript(StatoGioco, RuoloUmano)
+            % PASSIAMO IL TURNO AL CLIENT JAVASCRIPT
+            \script_javascript(StatoGioco, RuoloUmano, Turno)
         ]
     ).
 
@@ -203,12 +207,14 @@ banner_stato(vittoria_attaccante) --> html(div([class('banner-loss')], 'VITTORIA
 banner_stato(vittoria_difensore) --> html(div([class('banner-win')], 'VITTORIA! Il Re Bianco e fuggito!')).
 banner_stato(_) --> html(div([style('height: 48px; margin-bottom: 15px;')], '')).
 
-script_javascript(StatoGioco, RuoloUmano) -->
+script_javascript(StatoGioco, RuoloUmano, Turno) -->
     { format(string(StatoStr), "~w", [StatoGioco]),
-      format(string(RuoloStr), "~w", [RuoloUmano]) },
+      format(string(RuoloStr), "~w", [RuoloUmano]),
+      format(string(TurnoStr), "~w", [Turno]) },
     html(script(type('text/javascript'), [
         'let statoGioco = "', StatoStr, '";\n',
         'let ruoloUmano = "', RuoloStr, '";\n',
+        'let turnoAttuale = "', TurnoStr, '";\n',
         'let selX = null, selY = null;\n',
         'let ghostPiece = null;\n',
         'let validMoves = [];\n',
@@ -260,7 +266,9 @@ script_javascript(StatoGioco, RuoloUmano) -->
         '            let isAtt = piece.classList.contains("attaccante");\n',
         '            let isDif = piece.classList.contains("difensore") || piece.classList.contains("re");\n',
         '            let fazionePezzo = isAtt ? "attaccante" : (isDif ? "difensore" : "sconosciuto");\n',
-        '            if (ruoloUmano !== "sconosciuto" && fazionePezzo !== ruoloUmano) {\n',
+        '            \n',
+        '            /* CONTROLLO DEL TURNO ATTUALE */\n',
+        '            if (fazionePezzo !== turnoAttuale || (ruoloUmano !== "sconosciuto" && fazionePezzo !== ruoloUmano)) {\n',
         '                cell.style.backgroundColor = "rgba(255, 76, 76, 0.4)";\n',
         '                setTimeout(() => { cell.style.backgroundColor = ""; }, 300);\n',
         '                return;\n',
@@ -322,10 +330,37 @@ script_javascript(StatoGioco, RuoloUmano) -->
         '    }\n',
         '}\n\n',
 
+        /* --- ANIMAZIONE INTELLIGENZA ARTIFICIALE --- */
         'if (statoGioco === "calcolo_ai") {\n',
         '    setTimeout(() => {\n',
-        '        fetch("/trigger_ai").then(response => response.text()).then(res => { window.location.href = "/?t=" + Date.now(); });\n',
-        '    }, 300);\n',
+        '        fetch("/trigger_ai").then(response => response.text()).then(res => {\n',
+        '            if (res.includes(",")) {\n',
+        '                /* Il server ha risposto con FX,FY,TX,TY */\n',
+        '                let parts = res.trim().split(",");\n',
+        '                let p0 = parts[0], p1 = parts[1], p2 = parts[2], p3 = parts[3];\n',
+        '                let oldCell = document.getElementById("c_" + p0 + "_" + p1);\n',
+        '                let targetCell = document.getElementById("c_" + p2 + "_" + p3);\n',
+        '                if (oldCell && targetCell) {\n',
+        '                    let piece = oldCell.querySelector(".piece");\n',
+        '                    if (piece) {\n',
+        '                        let r1 = piece.getBoundingClientRect();\n',
+        '                        let r2 = targetCell.getBoundingClientRect();\n',
+        '                        let dx = r2.left - r1.left + (r2.width - r1.width)/2;\n',
+        '                        let dy = r2.top - r1.top + (r2.height - r1.height)/2;\n',
+        '                        /* Effetto sollevamento e volo */\n',
+        '                        piece.style.zIndex = "9999";\n',
+        '                        piece.style.transition = "transform 5s cubic-bezier(0.25, 1, 0.5, 1)";\n',
+        '                        piece.style.transform = "translate(" + dx + "px, " + (dy - 10) + "px) scale(1.15)";\n',
+        '                        /* Ricarica la pagina appena atterra */\n',
+        '                        setTimeout(() => { window.location.href = "/?t=" + Date.now(); }, 450);\n',
+        '                        return;\n',
+        '                    }\n',
+        '                }\n',
+        '            }\n',
+        '            /* Se manca l animazione o c è un errore, ricarica subito */\n',
+        '            window.location.href = "/?t=" + Date.now();\n',
+        '        });\n',
+        '    }, 50);\n',
         '}\n'
     ])).
 
@@ -356,12 +391,23 @@ renderizza_pedina(pezzo(soldato, attaccante)) --> html(div([class('piece attacca
 gestisci_mossa(Request) :-
     http_parameters(Request, [fx(FX, [integer]), fy(FY, [integer]), tx(TX, [integer]), ty(TY, [integer])]),
     stato_corrente(Pezzi), stato_gioco(turno_umano), 
-    member(pezzo(_, FazioneMossa, FX, FY), Pezzi), ruolo_umano(RuoloAttuale),
+    turno_attuale(TurnoAttuale),
+    member(pezzo(_, FazioneMossa, FX, FY), Pezzi),
+    
+    % VALIDAZIONE SERVER-SIDE DEL TURNO 
+    FazioneMossa = TurnoAttuale,
+    
+    ruolo_umano(RuoloAttuale), 
     ( RuoloAttuale = sconosciuto ; RuoloAttuale = FazioneMossa ), 
     ( engine:mossa_legale(FX, FY, TX, TY, Pezzi) ->
         imposta_ruoli_se_necessario(FazioneMossa), 
         engine:applica_mossa(FX, FY, TX, TY, Pezzi, NuoviPezzi),
         retractall(stato_corrente(_)), assertz(stato_corrente(NuoviPezzi)),
+        
+        % PASSA IL TURNO ALL'AVVERSARIO DOPO UNA MOSSA LEGALE
+        ai:avversario(FazioneMossa, ProssimoTurno),
+        retractall(turno_attuale(_)), assertz(turno_attuale(ProssimoTurno)),
+        
         ( engine:vittoria(NuoviPezzi, Vincitore) ->
             (Vincitore = attaccante -> V = vittoria_attaccante ; V = vittoria_difensore),
             retractall(stato_gioco(_)), assertz(stato_gioco(V))
@@ -376,9 +422,17 @@ imposta_ruoli_se_necessario(_).
 
 esegui_mossa_ai(_Request) :-
     stato_corrente(Pezzi), stato_gioco(calcolo_ai), ruolo_ai(FazioneAI),
+    turno_attuale(FazioneAI),
+    
+    % PROFONDITÀ ALZATA A 3! 
     ( ai:calcola_mossa_ai(Pezzi, FazioneAI, 1, mossa(FX, FY, TX, TY)) ->
         engine:applica_mossa(FX, FY, TX, TY, Pezzi, NuoviPezzi),
         retractall(stato_corrente(_)), assertz(stato_corrente(NuoviPezzi)),
+        
+        % L'AI PASSA IL TURNO AL GIOCATORE
+        ai:avversario(FazioneAI, ProssimoTurno),
+        retractall(turno_attuale(_)), assertz(turno_attuale(ProssimoTurno)),
+        
         ( engine:vittoria(NuoviPezzi, Vincitore) ->
             (Vincitore = attaccante -> V = vittoria_attaccante ; V = vittoria_difensore),
             retractall(stato_gioco(_)), assertz(stato_gioco(V))

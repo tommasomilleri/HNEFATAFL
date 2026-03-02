@@ -1,6 +1,6 @@
 % =========================================================
-% MODULO: engine.pl
-% Scopo: Regole di Hnefatafl, Catture e Vittoria
+% MODULO: engine.pl (TABLUT STORICO 9x9)
+% Scopo: Regole di movimento, Catture storiche e Vittoria
 % =========================================================
 
 :- module(engine, [mossa_legale/5, applica_mossa/6, vittoria/2]).
@@ -33,24 +33,27 @@ casella_speciale(5, 5). % Trono
 casella_speciale(1, 1). casella_speciale(1, 9).
 casella_speciale(9, 1). casella_speciale(9, 9).
 
-% --- 2. APPLICAZIONE MOSSA E CATTURE (SANDWICH E RE) ---
+% --- 2. APPLICAZIONE MOSSA E CATTURE ---
 applica_mossa(X0, Y0, X1, Y1, Pezzi, PezziFinali) :-
     select(pezzo(Tipo, Fazione, X0, Y0), Pezzi, Resto),
     PezziMossi = [pezzo(Tipo, Fazione, X1, Y1) | Resto],
-    % 1. Controllo le catture standard dei soldati
+    
+    % 1. Controllo le catture standard dei soldati (Sandwich a croce)
     cattura_direzione(X1, Y1, 0, -1, Fazione, PezziMossi, P1), % Nord
     cattura_direzione(X1, Y1, 0, 1, Fazione, P1, P2),          % Sud
     cattura_direzione(X1, Y1, -1, 0, Fazione, P2, P3),         % Ovest
     cattura_direzione(X1, Y1, 1, 0, Fazione, P3, P4),          % Est
-    % 2. Controllo se questa mossa ha circondato e ucciso il Re!
-    cattura_re(P4, PezziFinali).
+    
+    % 2. Controllo se QUESTA mossa ha catturato il Re
+    % Passo la "Fazione" per evitare che il Re si suicidi muovendosi tra due nemici
+    cattura_re(Fazione, P4, PezziFinali).
 
-% Logica del Sandwich per i SOLDATI
+% Logica del Sandwich per i normali SOLDATI
 cattura_direzione(X, Y, DX, DY, MiaFazione, PezziIn, PezziOut) :-
     Nx is X + DX, Ny is Y + DY,             
     Ox is Nx + DX, Oy is Ny + DY,           
     avversario(MiaFazione, Nemico),
-    % LIMITIAMO la cattura a panino solo ai "soldati"
+    % Limito la cattura a panino generica solo ai "soldati" nemici
     ( select(pezzo(soldato, Nemico, Nx, Ny), PezziIn, Resto) ->
         ( member(pezzo(_, MiaFazione, Ox, Oy), PezziIn) ; casella_speciale(Ox, Oy) ) ->
             PezziOut = Resto 
@@ -58,27 +61,53 @@ cattura_direzione(X, Y, DX, DY, MiaFazione, PezziIn, PezziOut) :-
     ; PezziOut = PezziIn     
     ).
 
-% Logica di accerchiamento per il RE (Deve essere chiuso su 4 lati)
-cattura_re(Pezzi, PezziFinali) :-
+% --- LOGICA DI CATTURA DEL RE (REGOLE TABLUT STORICHE) ---
+cattura_re(difensore, Pezzi, Pezzi). % Il difensore non può auto-uccidersi il Re
+cattura_re(attaccante, Pezzi, PezziFinali) :-
     ( member(pezzo(re, difensore, RX, RY), Pezzi),
-      ostile_al_re(RX, RY, 0, -1, Pezzi), % Nord
-      ostile_al_re(RX, RY, 0, 1, Pezzi),  % Sud
-      ostile_al_re(RX, RY, -1, 0, Pezzi), % Ovest
-      ostile_al_re(RX, RY, 1, 0, Pezzi)   % Est
-    ->
-      % Se è circondato da tutti i lati, il Re muore
+      re_in_trappola(RX, RY, Pezzi) ->
       select(pezzo(re, difensore, RX, RY), Pezzi, PezziFinali)
-    ; 
-      PezziFinali = Pezzi
+    ; PezziFinali = Pezzi
     ).
 
-% Una casella adiacente al Re è "ostile" se contiene un attaccante o è una casella speciale (es. Trono)
+% Caso A: Re sul Trono (5,5) -> Richiede 4 attaccanti (circondato totalmente)
+re_in_trappola(5, 5, Pezzi) :-
+    ostile_al_re(5, 5, 0, -1, Pezzi),
+    ostile_al_re(5, 5, 0, 1, Pezzi),
+    ostile_al_re(5, 5, -1, 0, Pezzi),
+    ostile_al_re(5, 5, 1, 0, Pezzi).
+
+% Caso B: Re adiacente al Trono -> Richiede 3 attaccanti (il 4° lato è il trono ostile)
+re_in_trappola(RX, RY, Pezzi) :-
+    adiacente_al_trono(RX, RY),
+    ostile_al_re(RX, RY, 0, -1, Pezzi),
+    ostile_al_re(RX, RY, 0, 1, Pezzi),
+    ostile_al_re(RX, RY, -1, 0, Pezzi),
+    ostile_al_re(RX, RY, 1, 0, Pezzi).
+
+% Caso C: Re in campo aperto -> Cattura Sandwich normale (basta che sia chiuso su 2 lati opposti!)
+re_in_trappola(RX, RY, Pezzi) :-
+    \+ (RX = 5, RY = 5),
+    \+ adiacente_al_trono(RX, RY),
+    (
+        (ostile_al_re(RX, RY, 0, -1, Pezzi), ostile_al_re(RX, RY, 0, 1, Pezzi)) ; % Panino Verticale
+        (ostile_al_re(RX, RY, -1, 0, Pezzi), ostile_al_re(RX, RY, 1, 0, Pezzi))   % Panino Orizzontale
+    ).
+
+% Helper: Coordinate adiacenti al Trono
+adiacente_al_trono(4, 5).
+adiacente_al_trono(6, 5).
+adiacente_al_trono(5, 4).
+adiacente_al_trono(5, 6).
+
+% Una casella adiacente al Re è "ostile" se contiene un attaccante o è speciale (Trono/Angoli)
 ostile_al_re(RX, RY, DX, DY, Pezzi) :-
     NX is RX + DX, NY is RY + DY,
     ( member(pezzo(_, attaccante, NX, NY), Pezzi) ; casella_speciale(NX, NY) ).
 
 avversario(difensore, attaccante).
 avversario(attaccante, difensore).
+
 % --- 3. CONDIZIONI DI VITTORIA ---
 vittoria(Pezzi, difensore) :-
     % Il difensore vince se il Re è su uno dei 4 angoli
@@ -86,5 +115,5 @@ vittoria(Pezzi, difensore) :-
     casella_speciale(X, Y), X \= 5. 
 
 vittoria(Pezzi, attaccante) :-
-    % L'attaccante vince se non c'è più il Re sulla plancia (mangiato)
+    % L'attaccante vince se non c'è più il Re sulla plancia
     \+ member(pezzo(re, difensore, _, _), Pezzi).
