@@ -349,7 +349,7 @@ script_javascript(StatoGioco, RuoloUmano, Turno) -->
         '                        let dy = r2.top - r1.top + (r2.height - r1.height)/2;\n',
         '                        /* Effetto sollevamento e volo */\n',
         '                        piece.style.zIndex = "9999";\n',
-        '                        piece.style.transition = "transform 5s cubic-bezier(0.25, 1, 0.5, 1)";\n',
+        '                        piece.style.transition = "transform 1s cubic-bezier(0.25, 1, 0.5, 1)";\n',
         '                        piece.style.transform = "translate(" + dx + "px, " + (dy - 10) + "px) scale(1.15)";\n',
         '                        /* Ricarica la pagina appena atterra */\n',
         '                        setTimeout(() => { window.location.href = "/?t=" + Date.now(); }, 450);\n',
@@ -421,21 +421,59 @@ imposta_ruoli_se_necessario(FazioneMossa) :-
 imposta_ruoli_se_necessario(_).
 
 esegui_mossa_ai(_Request) :-
-    stato_corrente(Pezzi), stato_gioco(calcolo_ai), ruolo_ai(FazioneAI),
-    turno_attuale(FazioneAI),
-    
-    % PROFONDITÀ ALZATA A 3! 
-    ( ai:calcola_mossa_ai(Pezzi, FazioneAI, 1, mossa(FX, FY, TX, TY)) ->
-        engine:applica_mossa(FX, FY, TX, TY, Pezzi, NuoviPezzi),
-        retractall(stato_corrente(_)), assertz(stato_corrente(NuoviPezzi)),
-        
-        % L'AI PASSA IL TURNO AL GIOCATORE
-        ai:avversario(FazioneAI, ProssimoTurno),
-        retractall(turno_attuale(_)), assertz(turno_attuale(ProssimoTurno)),
-        
-        ( engine:vittoria(NuoviPezzi, Vincitore) ->
-            (Vincitore = attaccante -> V = vittoria_attaccante ; V = vittoria_difensore),
-            retractall(stato_gioco(_)), assertz(stato_gioco(V))
-        ; retractall(stato_gioco(_)), assertz(stato_gioco(turno_umano)) ),
-        format('Content-type: text/plain~n~nok')
-    ; retractall(stato_gioco(_)), assertz(stato_gioco(turno_umano)), format('Content-type: text/plain~n~nko_nessuna_mossa') ).
+    catch(
+        (
+            stato_corrente(Pezzi), stato_gioco(calcolo_ai), ruolo_ai(FazioneAI), turno_attuale(FazioneAI),
+            
+            % PROFONDITÀ A 2: Veloce e spietata!
+            ( ai:calcola_mossa_ai(Pezzi, FazioneAI, 5, mossa(FX, FY, TX, TY)) ->
+                engine:applica_mossa(FX, FY, TX, TY, Pezzi, NuoviPezzi),
+                retractall(stato_corrente(_)), assertz(stato_corrente(NuoviPezzi)),
+                ai:avversario(FazioneAI, ProssimoTurno),
+                retractall(turno_attuale(_)), assertz(turno_attuale(ProssimoTurno)),
+                ( engine:vittoria(NuoviPezzi, Vincitore) ->
+                    (Vincitore = attaccante -> V = vittoria_attaccante ; V = vittoria_difensore),
+                    retractall(stato_gioco(_)), assertz(stato_gioco(V))
+                ; retractall(stato_gioco(_)), assertz(stato_gioco(turno_umano)) ),
+                
+                % INVIO COORDINATE AL JAVASCRIPT PER L'ANIMAZIONE!
+                format('Content-type: text/plain~n~n~w,~w,~w,~w', [FX, FY, TX, TY])
+                
+            ; retractall(stato_gioco(_)), assertz(stato_gioco(turno_umano)), format('Content-type: text/plain~n~nko_nessuna_mossa') )
+        ),
+        _Error,
+        (
+            % FAIL-SAFE DI EMERGENZA: Se l'IA crasha per qualsiasi motivo, 
+            % si sblocca lo stato, si evita il loop infinito e tocca all'umano!
+            retractall(stato_gioco(_)), assertz(stato_gioco(turno_umano)),
+            format('Content-type: text/plain~n~nko_server_error')
+        )
+    ).
+/*esegui_mossa_ai(_Request) :-
+    catch(
+        (
+            stato_corrente(Pezzi), stato_gioco(calcolo_ai), ruolo_ai(FazioneAI), turno_attuale(FazioneAI),
+            
+            % PROFONDITA' MASSIMA CONSENTITA: 7 (God Mode)
+            ( ai:calcola_mossa_ai(Pezzi, FazioneAI, 7, mossa(FX, FY, TX, TY)) ->
+                engine:applica_mossa(FX, FY, TX, TY, Pezzi, NuoviPezzi),
+                retractall(stato_corrente(_)), assertz(stato_corrente(NuoviPezzi)),
+                ai:avversario(FazioneAI, ProssimoTurno),
+                retractall(turno_attuale(_)), assertz(turno_attuale(ProssimoTurno)),
+                ( engine:vittoria(NuoviPezzi, Vincitore) ->
+                    (Vincitore = attaccante -> V = vittoria_attaccante ; V = vittoria_difensore),
+                    retractall(stato_gioco(_)), assertz(stato_gioco(V))
+                ; retractall(stato_gioco(_)), assertz(stato_gioco(turno_umano)) ),
+                
+                % INVIO COORDINATE AL JAVASCRIPT PER L'ANIMAZIONE!
+                format('Content-type: text/plain~n~n~w,~w,~w,~w', [FX, FY, TX, TY])
+                
+            ; retractall(stato_gioco(_)), assertz(stato_gioco(turno_umano)), format('Content-type: text/plain~n~nko_nessuna_mossa') )
+        ),
+        _Error,
+        (
+            % FAIL-SAFE DI EMERGENZA
+            retractall(stato_gioco(_)), assertz(stato_gioco(turno_umano)),
+            format('Content-type: text/plain~n~nko_server_error')
+        )
+    ).*/

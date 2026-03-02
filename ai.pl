@@ -1,132 +1,139 @@
 % =========================================================
-% MODULO: ai.pl (AI Avanzata con Alpha-Beta Pruning)
+% MODULO: ai.pl (Motore Scacchistico - PROFONDITÀ 5)
+% Tecniche: Alpha-Beta + Move Ordering + Imbuto Dinamico
 % =========================================================
 
-:- module(ai, [calcola_mossa_ai/4]).
+:- module(ai, [calcola_mossa_ai/4, avversario/2]).
 :- use_module(engine).
 :- use_module(kb).
 :- use_module(library(random)).
 
-% --- ENTRY POINT: Calcolo della mossa migliore ---
+% --- ENTRY POINT ---
 calcola_mossa_ai(Pezzi, FazioneAI, Profondita, MossaScelta) :-
-    % 1. Trova tutte le mosse legali
-    findall(mossa(FX, FY, TX, TY, NuoviPezzi), genera_mossa_valida(Pezzi, FazioneAI, FX, FY, TX, TY, NuoviPezzi), MossePossibili),
-    MossePossibili \= [], 
+    genera_mosse_ordinate(Pezzi, FazioneAI, MosseOrdinate),
+    MosseOrdinate \= [], 
     
-    % 2. Mischiamo le mosse per evitare pattern ripetitivi a parità di punteggio
-    random_permutation(MossePossibili, MosseMischiate),
+    % IMBUTO (LIVELLO RADICE): Essendo il primo passo, guardiamo un ventaglio largo
+    LimiteRadice is Profondita * 4, % Se Prof=5, analizza le prime 20 mosse migliori
+    prendi_primi(LimiteRadice, MosseOrdinate, MosseTop), 
     
-    % 3. Avviamo la ricerca Alpha-Beta dal nodo radice
-    % Inizializziamo Alpha = -10000 e Beta = 10000
-    Alpha = -10000,
-    Beta = 10000,
-    valuta_radice(MosseMischiate, FazioneAI, Profondita, Alpha, Beta, -10000, mossa(-1,-1,-1,-1), MossaScelta, _PunteggioMigliore).
+    Alpha = -100000,
+    Beta = 100000,
+    valuta_radice(MosseTop, FazioneAI, Profondita, Alpha, Beta, -100000, mossa(-1,-1,-1,-1), MossaScelta, _Punteggio).
+
+% --- MOVE ORDERING (Riconosce le mosse letali a colpo d'occhio) ---
+genera_mosse_ordinate(Pezzi, Fazione, MosseOrdinate) :-
+    findall(
+        Score-mossa(FX, FY, TX, TY, NP),
+        (
+            genera_mossa_valida(Pezzi, Fazione, FX, FY, TX, TY, NP),
+            quick_eval(Pezzi, NP, Score)
+        ),
+        MosseConScore
+    ),
+    keysort(MosseConScore, MosseAscendenti),
+    reverse(MosseAscendenti, MosseOrdinate).
+
+quick_eval(VecchiPezzi, NuoviPezzi, Score) :-
+    length(VecchiPezzi, L1),
+    length(NuoviPezzi, L2),
+    PezziMangiati is L1 - L2,
+    random_between(0, 9, Rand), % Leggera dose di fantasia per non ripetere gli stessi pattern
+    Score is (PezziMangiati * 1000) + Rand.
+
+prendi_primi(0, _, []) :- !.
+prendi_primi(_, [], []) :- !.
+prendi_primi(N, [_Score-Mossa | T], [Mossa | R]) :-
+    N > 0, N1 is N - 1,
+    prendi_primi(N1, T, R).
 
 % --- CICLO RADICE ---
-% valuta_radice(Mosse, Fazione, Prof, Alpha, Beta, MigliorValoreFinora, MigliorMossaFinora, MossaFinale, ValoreFinale)
 valuta_radice([], _, _, _, _, ValoreTop, MossaTop, MossaTop, ValoreTop).
 valuta_radice([mossa(FX, FY, TX, TY, NP) | Resto], FazioneAI, Prof, Alpha, Beta, ValoreTop, MossaTop, MossaFinale, ValoreFinale) :-
-    % Valutiamo la mossa corrente passando il turno all'avversario (TurnoAI = false)
     alphabeta(NP, Prof, Alpha, Beta, FazioneAI, false, ValoreAttuale),
-    
-    % Aggiorniamo la mossa migliore se il valore attuale è più alto
     ( ValoreAttuale > ValoreTop ->
-        NuovoValoreTop = ValoreAttuale,
-        NuovaMossaTop = mossa(FX, FY, TX, TY)
-    ;
-        NuovoValoreTop = ValoreTop,
-        NuovaMossaTop = MossaTop
+        NuovoValoreTop = ValoreAttuale, NuovaMossaTop = mossa(FX, FY, TX, TY)
+    ;   NuovoValoreTop = ValoreTop, NuovaMossaTop = MossaTop
     ),
-    
-    % Aggiorniamo Alpha
     NuovoAlpha is max(Alpha, NuovoValoreTop),
-    
-    % Controlliamo il Pruning (Taglio del ramo)
     ( NuovoAlpha >= Beta ->
         MossaFinale = NuovaMossaTop, ValoreFinale = NuovoValoreTop
-    ;
-        % Continuiamo con la prossima mossa
-        valuta_radice(Resto, FazioneAI, Prof, NuovoAlpha, Beta, NuovoValoreTop, NuovaMossaTop, MossaFinale, ValoreFinale)
+    ;   valuta_radice(Resto, FazioneAI, Prof, NuovoAlpha, Beta, NuovoValoreTop, NuovaMossaTop, MossaFinale, ValoreFinale)
     ).
 
-% --- ALGORITMO ALPHA-BETA PRUNING ---
-% alphabeta(Pezzi, Profondita, Alpha, Beta, FazioneAI, TurnoAI, Punteggio).
-
-% Condizioni di terminazione: Vittoria o Fine Profondità
-alphabeta(Pezzi, _, _, _, FazioneAI, _, 10000) :- engine:vittoria(Pezzi, FazioneAI), !.
-alphabeta(Pezzi, _, _, _, FazioneAI, _, -10000) :- avversario(FazioneAI, Avv), engine:vittoria(Pezzi, Avv), !.
+% --- ALPHA-BETA PRUNING (Con Filtro Dinamico) ---
+alphabeta(Pezzi, _, _, _, FazioneAI, _, 100000) :- engine:vittoria(Pezzi, FazioneAI), !.
+alphabeta(Pezzi, _, _, _, FazioneAI, _, -100000) :- avversario(FazioneAI, Avv), engine:vittoria(Pezzi, Avv), !.
 alphabeta(Pezzi, 0, _, _, FazioneAI, _, Punteggio) :- !, euristica(Pezzi, FazioneAI, Punteggio).
 
-% NODO MAX (Turno dell'Intelligenza Artificiale)
+% NODO MAX (Turno dell'AI)
 alphabeta(Pezzi, Profondita, Alpha, Beta, FazioneAI, true, PunteggioMassimo) :-
     Profondita > 0,
-    findall(mossa(FX, FY, TX, TY, NP), genera_mossa_valida(Pezzi, FazioneAI, FX, FY, TX, TY, NP), Figli),
-    ( Figli = [] -> PunteggioMassimo = -10000 % Niente mosse = Sconfitta
+    genera_mosse_ordinate(Pezzi, FazioneAI, MosseOrdinate),
+    
+    % IMBUTO DINAMICO: Più andiamo in profondità, più stringiamo il raggio d'azione
+    Limite is max(3, Profondita * 2), 
+    prendi_primi(Limite, MosseOrdinate, Figli), 
+    
+    ( Figli = [] -> PunteggioMassimo = -100000 
     ; NuovaProf is Profondita - 1,
-      valuta_max(Figli, FazioneAI, NuovaProf, Alpha, Beta, -10000, PunteggioMassimo)
+      valuta_max(Figli, FazioneAI, NuovaProf, Alpha, Beta, -100000, PunteggioMassimo)
     ).
 
-% NODO MIN (Turno dell'Avversario Umano)
+% NODO MIN (Turno del Giocatore)
 alphabeta(Pezzi, Profondita, Alpha, Beta, FazioneAI, false, PunteggioMinimo) :-
     Profondita > 0,
     avversario(FazioneAI, Nemico),
-    findall(mossa(FX, FY, TX, TY, NP), genera_mossa_valida(Pezzi, Nemico, FX, FY, TX, TY, NP), Figli),
-    ( Figli = [] -> PunteggioMinimo = 10000 % Niente mosse nemico = Vittoria
+    genera_mosse_ordinate(Pezzi, Nemico, MosseOrdinate),
+    
+    Limite is max(3, Profondita * 2), 
+    prendi_primi(Limite, MosseOrdinate, Figli), 
+    
+    ( Figli = [] -> PunteggioMinimo = 100000 
     ; NuovaProf is Profondita - 1,
-      valuta_min(Figli, FazioneAI, NuovaProf, Alpha, Beta, 10000, PunteggioMinimo)
+      valuta_min(Figli, FazioneAI, NuovaProf, Alpha, Beta, 100000, PunteggioMinimo)
     ).
 
-% iterazione sui figli del NODO MAX
-valuta_max([], _, _, _, _, MigliorValore, MigliorValore).
+valuta_max([], _, _, _, _, Valore, Valore).
 valuta_max([mossa(_,_,_,_,NP) | Resto], FazioneAI, Prof, Alpha, Beta, ValoreAttuale, ValoreFinale) :-
     alphabeta(NP, Prof, Alpha, Beta, FazioneAI, false, ValoreFiglio),
-    NuovoValoreMax is max(ValoreAttuale, ValoreFiglio),
-    NuovoAlpha is max(Alpha, NuovoValoreMax),
-    ( NuovoAlpha >= Beta ->
-        ValoreFinale = NuovoValoreMax % PRUNING!
-    ;
-        valuta_max(Resto, FazioneAI, Prof, NuovoAlpha, Beta, NuovoValoreMax, ValoreFinale)
+    NuovoMax is max(ValoreAttuale, ValoreFiglio),
+    NuovoAlpha is max(Alpha, NuovoMax),
+    ( NuovoAlpha >= Beta -> ValoreFinale = NuovoMax
+    ; valuta_max(Resto, FazioneAI, Prof, NuovoAlpha, Beta, NuovoMax, ValoreFinale)
     ).
 
-% iterazione sui figli del NODO MIN
-valuta_min([], _, _, _, _, MigliorValore, MigliorValore).
+valuta_min([], _, _, _, _, Valore, Valore).
 valuta_min([mossa(_,_,_,_,NP) | Resto], FazioneAI, Prof, Alpha, Beta, ValoreAttuale, ValoreFinale) :-
     alphabeta(NP, Prof, Alpha, Beta, FazioneAI, true, ValoreFiglio),
-    NuovoValoreMin is min(ValoreAttuale, ValoreFiglio),
-    NuovoBeta is min(Beta, NuovoValoreMin),
-    ( Alpha >= NuovoBeta ->
-        ValoreFinale = NuovoValoreMin % PRUNING!
-    ;
-        valuta_min(Resto, FazioneAI, Prof, Alpha, NuovoBeta, NuovoValoreMin, ValoreFinale)
+    NuovoMin is min(ValoreAttuale, ValoreFiglio),
+    NuovoBeta is min(Beta, NuovoMin),
+    ( Alpha >= NuovoBeta -> ValoreFinale = NuovoMin
+    ; valuta_min(Resto, FazioneAI, Prof, Alpha, NuovoBeta, NuovoMin, ValoreFinale)
     ).
 
-% --- EURISTICA MIGLIORATA ---
-% Ora valuta non solo la distanza dal centro, ma penalizza enormemente l'attaccante 
-% se il Re raggiunge il bordo (e viceversa per il difensore).
-
+% --- EURISTICA ESTREMA ---
 euristica(Pezzi, attaccante, Punteggio) :-
     findall(1, member(pezzo(_, attaccante, _, _), Pezzi), LAtt), length(LAtt, NumAtt),
     findall(1, member(pezzo(_, difensore, _, _), Pezzi), LDif), length(LDif, NumDif),
     ( member(pezzo(re, difensore, RX, RY), Pezzi) ->
         DistanzaCentro is abs(RX - 5) + abs(RY - 5),
-        % Se il Re è sul bordo, è panico per l'attaccante!
-        ( (RX =:= 1 ; RX =:= 9 ; RY =:= 1 ; RY =:= 9) -> BordoMalus = 500 ; BordoMalus = 0 )
+        ( (RX =:= 1 ; RX =:= 9 ; RY =:= 1 ; RY =:= 9) -> BordoMalus = 5000 ; BordoMalus = 0 )
     ; DistanzaCentro = 0, BordoMalus = 0 
     ),
-    PunteggioBase is (NumAtt * 30) - (NumDif * 40), % Le pedine contano di più ora
-    Punteggio is PunteggioBase - (DistanzaCentro * 15) - BordoMalus.
+    PunteggioBase is (NumAtt * 60) - (NumDif * 80), 
+    Punteggio is PunteggioBase - (DistanzaCentro * 20) - BordoMalus.
 
 euristica(Pezzi, difensore, Punteggio) :-
     findall(1, member(pezzo(_, difensore, _, _), Pezzi), LDif), length(LDif, NumDif),
     findall(1, member(pezzo(_, attaccante, _, _), Pezzi), LAtt), length(LAtt, NumAtt),
     ( member(pezzo(re, difensore, RX, RY), Pezzi) ->
         DistanzaCentro is abs(RX - 5) + abs(RY - 5),
-        % Se il Re è sul bordo, vittoria vicina per il difensore!
-        ( (RX =:= 1 ; RX =:= 9 ; RY =:= 1 ; RY =:= 9) -> BordoBonus = 500 ; BordoBonus = 0 )
+        ( (RX =:= 1 ; RX =:= 9 ; RY =:= 1 ; RY =:= 9) -> BordoBonus = 5000 ; BordoBonus = 0 )
     ; DistanzaCentro = 0, BordoBonus = 0 
     ),
-    PunteggioBase is (NumDif * 40) - (NumAtt * 30),
-    Punteggio is PunteggioBase + (DistanzaCentro * 20) + BordoBonus.
+    PunteggioBase is (NumDif * 80) - (NumAtt * 60),
+    Punteggio is PunteggioBase + (DistanzaCentro * 30) + BordoBonus.
 
 % --- UTILS ---
 genera_mossa_valida(Pezzi, Fazione, FX, FY, TX, TY, NuoviPezzi) :-
@@ -138,3 +145,167 @@ genera_mossa_valida(Pezzi, Fazione, FX, FY, TX, TY, NuoviPezzi) :-
 
 avversario(difensore, attaccante).
 avversario(attaccante, difensore).
+/*
+% =========================================================
+% MODULO: ai.pl (L'IA "GOD MODE" - PROFONDITÀ ESTREMA 7)
+% Tecniche: Alpha-Beta + Razor Beam Search + God-Tier Heuristic
+% =========================================================
+
+:- module(ai, [calcola_mossa_ai/4, avversario/2]).
+:- use_module(engine).
+:- use_module(kb).
+:- use_module(library(random)).
+:- use_module(library(lists)).
+
+% --- ENTRY POINT ---
+calcola_mossa_ai(Pezzi, FazioneAI, Profondita, MossaScelta) :-
+    genera_mosse_ordinate(Pezzi, FazioneAI, MosseOrdinate),
+    MosseOrdinate \= [], 
+    
+    % IMBUTO RADICE: Legge la larghezza dal nuovo filtro a Lama di Rasoio
+    beam_width(Profondita, LimiteRadice), 
+    prendi_primi(LimiteRadice, MosseOrdinate, MosseTop), 
+    
+    Alpha = -1000000,
+    Beta = 1000000,
+    valuta_radice(MosseTop, FazioneAI, Profondita, Alpha, Beta, -1000000, mossa(-1,-1,-1,-1), MossaScelta, _Punteggio).
+
+% --- IL FILTRO "LAMA DI RASOIO" (Razor Beam Search) ---
+% Per sopravvivere a profondità 7, l'IA deve scartare le mosse inutili all'istante.
+% I calcoli totali massimi saranno: 12 * 8 * 6 * 4 * 3 * 2 * 1 = 13.824 rami. Istantaneo!
+beam_width(Depth, W) :- Depth >= 7, W = 12, !.
+beam_width(6, 8) :- !.
+beam_width(5, 6) :- !.
+beam_width(4, 4) :- !.
+beam_width(3, 3) :- !.
+beam_width(2, 2) :- !.
+beam_width(1, 1) :- !.
+beam_width(_, 5). % Sicurezza
+
+% --- MOVE ORDERING (Istinto Omicida) ---
+genera_mosse_ordinate(Pezzi, Fazione, MosseOrdinate) :-
+    findall(
+        Score-mossa(FX, FY, TX, TY, NP),
+        (
+            genera_mossa_valida(Pezzi, Fazione, FX, FY, TX, TY, NP),
+            quick_eval(NP, Fazione, Score)
+        ),
+        MosseConScore
+    ),
+    keysort(MosseConScore, MosseAscendenti),
+    reverse(MosseAscendenti, MosseOrdinate).
+
+quick_eval(NuoviPezzi, Fazione, Score) :-
+    ( engine:vittoria(NuoviPezzi, Fazione) -> 
+        Score = 1000000 % Mossa letale trovata: precedenza assoluta!
+    ; 
+        length(NuoviPezzi, L2), 
+        random_between(0, 9, Rand), 
+        Score is (-L2 * 1000) + Rand
+    ).
+
+prendi_primi(0, _, []) :- !.
+prendi_primi(_, [], []) :- !.
+prendi_primi(N, [_Score-Mossa | T], [Mossa | R]) :-
+    N > 0, N1 is N - 1,
+    prendi_primi(N1, T, R).
+
+% --- CICLO RADICE ALPHA-BETA ---
+valuta_radice([], _, _, _, _, ValoreTop, MossaTop, MossaTop, ValoreTop).
+valuta_radice([mossa(FX, FY, TX, TY, NP) | Resto], FazioneAI, Prof, Alpha, Beta, ValoreTop, MossaTop, MossaFinale, ValoreFinale) :-
+    alphabeta(NP, Prof, Alpha, Beta, FazioneAI, false, ValoreAttuale),
+    ( ValoreAttuale > ValoreTop ->
+        NuovoValoreTop = ValoreAttuale, NuovaMossaTop = mossa(FX, FY, TX, TY)
+    ;   NuovoValoreTop = ValoreTop, NuovaMossaTop = MossaTop
+    ),
+    NuovoAlpha is max(Alpha, NuovoValoreTop),
+    ( NuovoAlpha >= Beta ->
+        MossaFinale = NuovaMossaTop, ValoreFinale = NuovoValoreTop
+    ;   valuta_radice(Resto, FazioneAI, Prof, NuovoAlpha, Beta, NuovoValoreTop, NuovaMossaTop, MossaFinale, ValoreFinale)
+    ).
+
+% --- ALGORITMO ALPHA-BETA PRUNING ---
+alphabeta(Pezzi, _, _, _, FazioneAI, _, 1000000) :- engine:vittoria(Pezzi, FazioneAI), !.
+alphabeta(Pezzi, _, _, _, FazioneAI, _, -1000000) :- avversario(FazioneAI, Avv), engine:vittoria(Pezzi, Avv), !.
+alphabeta(Pezzi, 0, _, _, FazioneAI, _, Punteggio) :- !, euristica(Pezzi, FazioneAI, Punteggio).
+
+% NODO MAX
+alphabeta(Pezzi, Profondita, Alpha, Beta, FazioneAI, true, PunteggioMassimo) :-
+    Profondita > 0,
+    genera_mosse_ordinate(Pezzi, FazioneAI, MosseOrdinate),
+    beam_width(Profondita, Limite),
+    prendi_primi(Limite, MosseOrdinate, Figli), 
+    ( Figli = [] -> PunteggioMassimo = -1000000 
+    ; NuovaProf is Profondita - 1,
+      valuta_max(Figli, FazioneAI, NuovaProf, Alpha, Beta, -1000000, PunteggioMassimo)
+    ).
+
+% NODO MIN
+alphabeta(Pezzi, Profondita, Alpha, Beta, FazioneAI, false, PunteggioMinimo) :-
+    Profondita > 0,
+    avversario(FazioneAI, Nemico),
+    genera_mosse_ordinate(Pezzi, Nemico, MosseOrdinate),
+    beam_width(Profondita, Limite),
+    prendi_primi(Limite, MosseOrdinate, Figli), 
+    ( Figli = [] -> PunteggioMinimo = 1000000 
+    ; NuovaProf is Profondita - 1,
+      valuta_min(Figli, FazioneAI, NuovaProf, Alpha, Beta, 1000000, PunteggioMinimo)
+    ).
+
+valuta_max([], _, _, _, _, Valore, Valore).
+valuta_max([NP | Resto], FazioneAI, Prof, Alpha, Beta, ValoreAttuale, ValoreFinale) :-
+    alphabeta(NP, Prof, Alpha, Beta, FazioneAI, false, ValoreFiglio),
+    NuovoMax is max(ValoreAttuale, ValoreFiglio),
+    NuovoAlpha is max(Alpha, NuovoMax),
+    ( NuovoAlpha >= Beta -> ValoreFinale = NuovoMax
+    ; valuta_max(Resto, FazioneAI, Prof, NuovoAlpha, Beta, NuovoMax, ValoreFinale)
+    ).
+
+valuta_min([], _, _, _, _, Valore, Valore).
+valuta_min([NP | Resto], FazioneAI, Prof, Alpha, Beta, ValoreAttuale, ValoreFinale) :-
+    alphabeta(NP, Prof, Alpha, Beta, FazioneAI, true, ValoreFiglio),
+    NuovoMin is min(ValoreAttuale, ValoreFiglio),
+    NuovoBeta is min(Beta, NuovoMin),
+    ( Alpha >= NuovoBeta -> ValoreFinale = NuovoMin
+    ; valuta_min(Resto, FazioneAI, Prof, Alpha, NuovoBeta, NuovoMin, ValoreFinale)
+    ).
+
+% --- EURISTICA DIVINA ---
+euristica(Pezzi, Fazione, Punteggio) :-
+    findall(1, member(pezzo(_, attaccante, _, _), Pezzi), LAtt), length(LAtt, NumAtt),
+    findall(1, member(pezzo(_, difensore, _, _), Pezzi), LDif), length(LDif, NumDif),
+
+    ( member(pezzo(re, difensore, RX, RY), Pezzi) ->
+        min_distanza_angolo(RX, RY, DistAngolo),
+        findall(1, (member(pezzo(_, attaccante, AX, AY), Pezzi), abs(AX-RX)+abs(AY-RY) =:= 1), LMinacce),
+        length(LMinacce, MinacceRe)
+    ;
+        DistAngolo = 99, MinacceRe = 0
+    ),
+
+    ValoreAttaccanti is NumAtt * 100,
+    ValoreDifensori is NumDif * 150, 
+
+    ( Fazione == attaccante ->
+        Punteggio is ValoreAttaccanti - ValoreDifensori + (DistAngolo * 80) + (MinacceRe * 300)
+    ;
+        Punteggio is ValoreDifensori - ValoreAttaccanti - (DistAngolo * 100) - (MinacceRe * 400)
+    ).
+
+min_distanza_angolo(RX, RY, MinDist) :-
+    D1 is abs(RX - 1) + abs(RY - 1),
+    D2 is abs(RX - 1) + abs(RY - 9),
+    D3 is abs(RX - 9) + abs(RY - 1),
+    D4 is abs(RX - 9) + abs(RY - 9),
+    MinDist is min(min(D1, D2), min(D3, D4)).
+
+% --- UTILS ---
+genera_mossa_valida(Pezzi, Fazione, FX, FY, TX, TY, NuoviPezzi) :-
+    member(pezzo(_Tipo, Fazione, FX, FY), Pezzi),
+    kb:dimensione(Max),
+    ( between(1, Max, TX), TX \= FX, TY = FY ; between(1, Max, TY), TY \= FY, TX = FX ),
+    engine:mossa_legale(FX, FY, TX, TY, Pezzi),
+    engine:applica_mossa(FX, FY, TX, TY, Pezzi, NuoviPezzi).
+
+avversario(difensore, attaccante).
+avversario(attaccante, difensore).*/
