@@ -56,56 +56,125 @@ pagina_principale(_Request) :-
         title('Hnefatafl - Diorama Vichingo Storico'),
         [
             style('
-                /* Sfondo con la TUA Texture 6K */
+                /* SFONDO DEL TAVOLO (La tua texture 6K) */
                 body { 
                     background-color: #1a1511; 
-                    background-image: url("/tavolo.jpg?v=2");                    background-size: cover;
-                    background-position: center;
-                    background-attachment: fixed;
-                    color: #e0d0b0; 
-                    font-family: "Segoe UI", serif; 
-                    text-align: center; 
-                    user-select: none; 
-                    margin: 0; padding-top: 10px; 
-                    overflow-x: hidden; 
+                    background-image: url("/tavolo.jpg?v=2"); 
+                    background-size: cover; background-position: center; background-attachment: fixed;
+                    color: #e0d0b0; font-family: "Segoe UI", serif; text-align: center; user-select: none; margin: 0; padding-top: 10px; overflow-x: hidden; 
                 }
 
                 .btn-reset { background-color: rgba(26, 21, 17, 0.7); color: #c4a47c; border: 1px solid #c4a47c; padding: 8px 20px; cursor: pointer; margin-top: 5px; font-family: "Georgia", serif; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; transition: all 0.2s; backdrop-filter: blur(4px); }
                 .btn-reset:hover { background-color: #c4a47c; color: #1a1511; }
                 
-                table { border-collapse: collapse; border: 12px solid #2e1d10; border-radius: 4px; box-shadow: 0px 30px 70px rgba(0,0,0,0.95); margin: auto; background-color: #a47e57; background-image: url("https://www.transparenttextures.com/patterns/wood-pattern.png"); }
-                .board-cell { width: 70px; height: 70px; text-align: center; vertical-align: middle; padding: 0; position: relative; border: 1px solid rgba(46, 29, 16, 0.8); }
-                .board-cell.light { background-color: rgba(255,255,255,0.06); }
-                .board-cell.dark { background-color: rgba(0,0,0,0.12); }
-                .board-cell.throne { background-color: rgba(0,0,0,0.25); }
-                .board-cell.corner { background-color: rgba(0,0,0,0.25); }
-                .board-cell.corner::after { content: "ᛝ"; color: rgba(46, 29, 16, 0.5); font-size: 45px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; }
-                .board-cell.throne::after { content: "ᛝ"; color: rgba(0, 0, 0, 0.4); font-size: 45px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+                /* ===================================================
+                   LA PLANCIA: Rovere invecchiato scolpito in 3D
+                =================================================== */
+                table { 
+                    border-collapse: collapse; margin: auto; 
+                    
+                    /* Bordo massiccio di legno scuro */
+                    border: 24px solid #2e1d14; 
+                    border-radius: 8px; 
+                    
+                    /* Ombre per farla staccare dal tavolo e ombra interna per profondità */
+                    box-shadow: 0px 40px 80px rgba(0,0,0,0.9), inset 0 0 30px rgba(0,0,0,0.7); 
+                    
+                    /* Materiale: Texture legno + Gradiente radiale (chiaro al centro, scuro ai bordi) */
+                    background-color: #5c3e26;
+                    background-image: url("https://www.transparenttextures.com/patterns/wood-pattern.png"), 
+                                      radial-gradient(circle, rgba(138,90,50,0.4) 0%, rgba(46,26,12,0.9) 100%);
+                }
                 
-                .valid-move { box-shadow: inset 0 0 0 3px rgba(255, 215, 0, 0.5) !important; cursor: pointer; }
+                /* Le celle 9x9 */
+                .board-cell { 
+                    width: 72px; height: 72px; 
+                    text-align: center; vertical-align: middle; padding: 0; position: relative; 
+                    /* Incisione a fuoco per la griglia */
+                    border: 2px solid rgba(25, 12, 5, 0.6); 
+                }
                 
-                .piece { width: 44px; height: 44px; border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: normal; position: relative; z-index: 10; cursor: pointer; pointer-events: none; border: 2px solid rgba(0,0,0,0.7); transition: all 0.15s ease-out; background-image: url("https://www.transparenttextures.com/patterns/retina-wood.png"); }
+                /* Alternanza tenue stile scacchiera */
+                .board-cell.light { background-color: rgba(255,255,255,0.02); }
+                .board-cell.dark { background-color: rgba(0,0,0,0.1); }
+                
+                /* Caselle Speciali (Trono e Angoli) -> Effetto SCAVATO nel legno */
+                .board-cell.throne { 
+                    background-color: rgba(15, 5, 0, 0.25); 
+                    box-shadow: inset 0 0 20px rgba(0,0,0,0.7); 
+                }
+                .board-cell.corner { 
+                    background-color: rgba(15, 5, 0, 0.35); 
+                    box-shadow: inset 0 0 25px rgba(0,0,0,0.8); 
+                }
+                
+                /* Rune marchiate a fuoco nel legno */
+                .board-cell.corner::after { content: "ᛝ"; color: rgba(20, 10, 5, 0.7); font-size: 50px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; text-shadow: 0px 1px 1px rgba(255,255,255,0.1); }
+                .board-cell.throne::after { content: "ᛝ"; color: rgba(20, 10, 5, 0.5); font-size: 50px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; text-shadow: 0px 1px 1px rgba(255,255,255,0.1); }
+                
+                /* Selezione della mossa (Oro brillante) */
+                .valid-move { 
+                    box-shadow: inset 0 0 0 4px rgba(255, 200, 0, 0.6), inset 0 0 15px rgba(255,200,0,0.3) !important; 
+                    cursor: pointer; 
+                }
+                
+                /* ===================================================
+                   LE PEDINE: Ossidiana Lucida e Osso Intagliato
+                =================================================== */
+                .piece { 
+                    width: 48px; height: 48px; border-radius: 50%; margin: 0 auto; 
+                    display: flex; align-items: center; justify-content: center; 
+                    font-size: 26px; font-weight: normal; position: relative; z-index: 10; 
+                    cursor: pointer; pointer-events: none; transition: all 0.15s ease-out; 
+                }
                 .board-cell > .piece { pointer-events: auto; }
                 
-                .piece.attaccante { background-color: #3b2214; color: #1a0f08; text-shadow: 1px 1px 0px rgba(255,255,255,0.1); box-shadow: inset 0 0 8px rgba(0,0,0,0.9), 0 5px 0 #140b06, 0 8px 6px rgba(0,0,0,0.8); transform: translateY(-4px); }
-                .piece.difensore { background-color: #d4c5b6; color: #4a3625; text-shadow: 1px 1px 0px rgba(255,255,255,0.6); box-shadow: inset 0 0 8px rgba(130,100,80,0.6), 0 5px 0 #7a6554, 0 8px 6px rgba(0,0,0,0.8); transform: translateY(-4px); }
-                .piece.re { width: 50px; height: 50px; font-size: 28px; background-color: #cfa144; color: #3b280b; text-shadow: 1px 1px 0px rgba(255,255,255,0.4); box-shadow: inset 0 0 10px rgba(120,70,10,0.7), 0 7px 0 #78561b, 0 10px 8px rgba(0,0,0,0.9); transform: translateY(-6px); }
+                /* PIETRA NERA LUCIDA (Attaccanti - Jötunn) */
+                .piece.attaccante { 
+                    background: radial-gradient(circle at 30% 30%, #4a4a4a, #111111 60%, #000000); 
+                    color: #ffffff; text-shadow: 0 0 4px rgba(255,255,255,0.8); border: 1px solid #000000;
+                    box-shadow: inset -2px -3px 6px rgba(0,0,0,0.9), inset 2px 2px 5px rgba(255,255,255,0.5), 0 5px 0 #050505, 0 8px 6px rgba(0,0,0,0.9); 
+                    transform: translateY(-3px); 
+                }
                 
+                /* OSSO VISSUTO (Difensori - Einherjar) */
+                .piece.difensore { 
+                    background-color: #e3d5c8;
+                    background-image: url("https://www.transparenttextures.com/patterns/dust.png"), radial-gradient(circle at 30% 30%, #ffffff, #e3d5c8 60%, #b8a695);
+                    color: #111111; text-shadow: 1px 1px 0px rgba(255,255,255,0.8); border: 1px solid #8c7b6b;
+                    box-shadow: inset -2px -3px 6px rgba(100,80,60,0.4), inset 2px 2px 4px rgba(255,255,255,0.9), 0 5px 0 #9c8a79, 0 8px 6px rgba(0,0,0,0.8); 
+                    transform: translateY(-3px); 
+                }
+                
+                /* IL RE (Odino) - Oro Antico / Ambra */
+                .piece.re { 
+                    width: 56px; height: 56px; font-size: 32px; 
+                    background: radial-gradient(circle at 30% 30%, #fcd462, #cfa144 60%, #8a651f);
+                    color: #ffffff; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); border: 1px solid #5c4112;
+                    box-shadow: inset -2px -3px 6px rgba(100,50,0,0.6), inset 2px 2px 5px rgba(255,255,255,0.8), 0 5px 0 #78561b, 0 10px 8px rgba(0,0,0,0.9); 
+                    transform: translateY(-4px); 
+                }
+                
+                /* Animazioni di sollevamento per lo snap (Ghost) */
                 .floating-ghost { position: absolute !important; z-index: 9999 !important; pointer-events: none !important; transition: left 0.1s linear, top 0.1s linear, transform 0.15s; transform: scale(1.1) translateY(-15px) !important; }
-                .floating-ghost.attaccante { box-shadow: inset 0 0 8px rgba(0,0,0,0.9), 0 5px 0 #140b06, 0 25px 15px rgba(0,0,0,0.6) !important; }
-                .floating-ghost.difensore { box-shadow: inset 0 0 8px rgba(130,100,80,0.6), 0 5px 0 #7a6554, 0 25px 15px rgba(0,0,0,0.6) !important; }
-                .floating-ghost.re { box-shadow: inset 0 0 10px rgba(120,70,10,0.7), 0 7px 0 #78561b, 0 30px 20px rgba(0,0,0,0.6) !important; }
+                .floating-ghost.attaccante { box-shadow: inset -2px -3px 6px rgba(0,0,0,0.9), inset 2px 2px 5px rgba(255,255,255,0.5), 0 5px 0 #050505, 0 25px 15px rgba(0,0,0,0.6) !important; }
+                .floating-ghost.difensore { box-shadow: inset -2px -3px 6px rgba(100,80,60,0.4), inset 2px 2px 4px rgba(255,255,255,0.9), 0 5px 0 #9c8a79, 0 25px 15px rgba(0,0,0,0.6) !important; }
+                .floating-ghost.re { box-shadow: inset -2px -3px 6px rgba(100,50,0,0.6), inset 2px 2px 5px rgba(255,255,255,0.8), 0 5px 0 #78561b, 0 30px 20px rgba(0,0,0,0.6) !important; }
                 
                 .dropping { transform: translateY(0) scale(1) !important; box-shadow: 0 1px 0 rgba(0,0,0,0.8), 0 2px 3px rgba(0,0,0,0.8) !important; transition: all 0.1s ease-in !important; z-index: 10; }
                 
-                .banner-ai { color: #d4a348; padding: 10px; font-size: 16px; font-family: "Georgia", serif; font-style: italic; letter-spacing: 1px; background-color: rgba(26, 21, 17, 0.7); border-radius: 4px; width: fit-content; margin: 0 auto 15px auto; backdrop-filter: blur(4px); }
-                .banner-win { background-color: rgba(74, 99, 17, 0.9); color: white; padding: 15px 40px; border-radius: 4px; width: fit-content; margin: 0 auto 15px auto; font-size: 20px; font-weight: bold; box-shadow: 0 10px 20px rgba(0,0,0,0.8); backdrop-filter: blur(4px); }
-                .banner-loss { background-color: rgba(107, 0, 0, 0.9); color: white; padding: 15px 40px; border-radius: 4px; width: fit-content; margin: 0 auto 15px auto; font-size: 20px; font-weight: bold; box-shadow: 0 10px 20px rgba(0,0,0,0.8); backdrop-filter: blur(4px); }
+                /* Stili per le scritte in alto (Banner) */
+                .banner-ai, .banner-win, .banner-loss { padding: 10px 30px; border-radius: 4px; width: fit-content; margin: 0 auto 15px auto; font-family: "Georgia", serif; backdrop-filter: blur(4px); }
+                .banner-ai { color: #d4a348; font-style: italic; background-color: rgba(26, 21, 17, 0.7); }
+                .banner-win { background-color: rgba(74, 99, 17, 0.9); color: white; font-size: 20px; font-weight: bold; }
+                .banner-loss { background-color: rgba(107, 0, 0, 0.9); color: white; font-size: 20px; font-weight: bold; }
             '),
             h1([style('margin-top: 15px; letter-spacing: 4px; margin-bottom: 5px; font-family: "Georgia", serif; color: #d1bfae; font-weight: normal; text-shadow: 2px 2px 5px #000;')], 'HNEFATAFL'),
             button([class('btn-reset'), onclick('fetch("/reset").then(()=>window.location.href = "/?t=" + Date.now())')], 'Nuova Battaglia'),
             div([style('height: 20px;')], ''),
             \banner_stato(StatoGioco),
+            
+            /* LA TABELLA 9x9 CSS (Niente più foto per la scacchiera) */
             div([style('display: flex; justify-content: center; padding-bottom: 40px;')], \renderizza_scacchiera(Pezzi)),
             \script_javascript(StatoGioco, RuoloUmano)
         ]
