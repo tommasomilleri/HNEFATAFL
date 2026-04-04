@@ -426,7 +426,7 @@ esegui_mossa_ai(_Request) :-
             stato_corrente(Pezzi), stato_gioco(calcolo_ai), ruolo_ai(FazioneAI), turno_attuale(FazioneAI),
             
             % PROFONDITÀ A 2: Veloce e spietata!
-            ( ai:calcola_mossa_ai(Pezzi, FazioneAI, 5, mossa(FX, FY, TX, TY)) ->
+            ( ai:calcola_mossa_ai(Pezzi, FazioneAI, 3, mossa(FX, FY, TX, TY)) ->
                 engine:applica_mossa(FX, FY, TX, TY, Pezzi, NuoviPezzi),
                 retractall(stato_corrente(_)), assertz(stato_corrente(NuoviPezzi)),
                 ai:avversario(FazioneAI, ProssimoTurno),
