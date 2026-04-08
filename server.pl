@@ -195,18 +195,23 @@ pagina_principale(_Request) :-
             h1([style('margin-top: 15px; letter-spacing: 4px; margin-bottom: 5px; font-family: "Georgia", serif; color: #d1bfae; font-weight: normal; text-shadow: 2px 2px 5px #000;')], 'HNEFATAFL'),
             button([class('btn-reset'), onclick('fetch("/reset").then(()=>window.location.href = "/?t=" + Date.now())')], 'Nuova Battaglia'),
             div([style('height: 20px;')], ''),
-            \banner_stato(StatoGioco),
+            
+            % ATTENZIONE: Ci deve essere SOLO QUESTO richiamo a \banner_stato, non uno fuori e uno dentro!
+            div([style('height: 60px; display: flex; flex-direction: column; justify-content: center; align-items: center; margin-bottom: 5px;')], 
+                \banner_stato(StatoGioco)
+            ),
+            
             div([style('display: flex; justify-content: center; padding-bottom: 40px;')], \renderizza_scacchiera(Pezzi)),
             % PASSIAMO IL TURNO AL CLIENT JAVASCRIPT
             \script_javascript(StatoGioco, RuoloUmano, Turno)
         ]
     ).
 
-banner_stato(calcolo_ai) --> html(div([class('banner-ai')], '... Il Nemico sta riflettendo ...')).
-banner_stato(vittoria_attaccante) --> html(div([class('banner-loss')], 'VITTORIA! I Rossi hanno schiacciato il Re!')).
-banner_stato(vittoria_difensore) --> html(div([class('banner-win')], 'VITTORIA! Il Re Bianco e fuggito!')).
-banner_stato(_) --> html(div([style('height: 48px; margin-bottom: 15px;')], '')).
-
+% --- GESTIONE BANNER CON CUT DETERMINISTICI ---
+banner_stato(calcolo_ai) --> !, html(div([class('banner-ai'), style('margin: 0;')], '... Il Nemico sta riflettendo ...')).
+banner_stato(vittoria_attaccante) --> !, html(div([class('banner-loss'), style('margin: 0;')], 'VITTORIA! I Rossi hanno schiacciato il Re!')).
+banner_stato(vittoria_difensore) --> !, html(div([class('banner-win'), style('margin: 0;')], 'VITTORIA! Il Re Bianco e fuggito!')).
+banner_stato(_) --> html(''). % Fallback pulito senza div invisibili
 script_javascript(StatoGioco, RuoloUmano, Turno) -->
     { format(string(StatoStr), "~w", [StatoGioco]),
       format(string(RuoloStr), "~w", [RuoloUmano]),
@@ -220,6 +225,9 @@ script_javascript(StatoGioco, RuoloUmano, Turno) -->
         'let validMoves = [];\n',
         'let isKing = false;\n\n',
         
+        '/* UTILITY: Promessa per bloccare l esecuzione temporaneamente */\n',
+        'const sleep = ms => new Promise(r => setTimeout(r, ms));\n\n',
+        
         'function getValidMoves(sx, sy) {\n',
         '    let valid = [];\n',
         '    let dirs = [[0,-1], [0,1], [-1,0], [1,0]];\n',
@@ -229,11 +237,8 @@ script_javascript(StatoGioco, RuoloUmano, Turno) -->
         '            let cell = document.getElementById("c_" + cx + "_" + cy);\n',
         '            if (cell.querySelector(".piece")) break; \n',
         '            let isRestricted = cell.classList.contains("corner") || cell.classList.contains("throne");\n',
-        '            if (!isKing && isRestricted) {\n',
-        '                /* Il pezzo normale puo passare sopra al trono, ma l\'engine blocca lo stop */\n',
-        '            } else {\n',
-        '                valid.push(cx + "_" + cy);\n',
-        '            }\n',
+        '            if (!isKing && isRestricted) {}\n',
+        '            else { valid.push(cx + "_" + cy); }\n',
         '            cx += d[0]; cy += d[1];\n',
         '        }\n',
         '    }\n',
@@ -256,7 +261,7 @@ script_javascript(StatoGioco, RuoloUmano, Turno) -->
         '    }\n',
         '});\n\n',
 
-        'function clicca(x, y, event) {\n',
+        'async function clicca(x, y, event) {\n',
         '    if (statoGioco !== "turno_umano") return;\n',
         '    let cell = document.getElementById("c_" + x + "_" + y);\n',
         '    let piece = cell.querySelector(".piece");\n',
@@ -267,7 +272,6 @@ script_javascript(StatoGioco, RuoloUmano, Turno) -->
         '            let isDif = piece.classList.contains("difensore") || piece.classList.contains("re");\n',
         '            let fazionePezzo = isAtt ? "attaccante" : (isDif ? "difensore" : "sconosciuto");\n',
         '            \n',
-        '            /* CONTROLLO DEL TURNO ATTUALE */\n',
         '            if (fazionePezzo !== turnoAttuale || (ruoloUmano !== "sconosciuto" && fazionePezzo !== ruoloUmano)) {\n',
         '                cell.style.backgroundColor = "rgba(255, 76, 76, 0.4)";\n',
         '                setTimeout(() => { cell.style.backgroundColor = ""; }, 300);\n',
@@ -290,7 +294,6 @@ script_javascript(StatoGioco, RuoloUmano, Turno) -->
         '        let targetId = x + "_" + y;\n',
         '        let oldCell = document.getElementById("c_" + selX + "_" + selY);\n',
         '        let oldP = oldCell.querySelector(".piece");\n',
-        '        \n',
         '        validMoves.forEach(id => document.getElementById("c_" + id).classList.remove("valid-move"));\n',
         '        \n',
         '        if (selX === x && selY === y) { \n',
@@ -301,25 +304,27 @@ script_javascript(StatoGioco, RuoloUmano, Turno) -->
         '        \n',
         '        if (validMoves.includes(targetId)) {\n',
         '            let fx = selX; let fy = selY; selX = null; selY = null;\n',
-        '            \n',
         '            if(ghostPiece) ghostPiece.remove();\n',
         '            ghostPiece = null;\n',
         '            oldP.style.opacity = "1";\n',
-        '            oldP.classList.remove("floating");\n',
-        '            oldP.classList.add("dropping");\n',
+        '            oldP.classList.remove("floating", "dropping");\n',
         '            cell.appendChild(oldP);\n',
         '            \n',
-        '            fetch("/muovi?fx=" + fx + "&fy=" + fy + "&tx=" + x + "&ty=" + y)\n',
-        '            .then(r => r.text()).then(res => {\n',
+        '            /* ANIMAZIONE: Lasciamo depositare la pedina prima di inviare al server */\n',
+        '            await sleep(200);\n',
+        '            \n',
+        '            try {\n',
+        '                let res = await fetch(`/muovi?fx=${fx}&fy=${fy}&tx=${x}&ty=${y}`).then(r => r.text());\n',
         '                if (res === "ok") {\n',
         '                    window.location.href = "/?t=" + Date.now();\n',
         '                } else {\n',
         '                    oldCell.appendChild(oldP);\n',
         '                    oldP.classList.remove("dropping");\n',
         '                    cell.style.backgroundColor = "rgba(255, 76, 76, 0.4)";\n',
-        '                    setTimeout(() => { cell.style.backgroundColor = ""; }, 300);\n',
+        '                    await sleep(300);\n',
+        '                    cell.style.backgroundColor = "";\n',
         '                }\n',
-        '            }).catch(() => { window.location.href = "/?t=" + Date.now(); });\n',
+        '            } catch(e) { window.location.href = "/?t=" + Date.now(); }\n',
         '        } else {\n',
         '            cell.style.backgroundColor = "rgba(255, 76, 76, 0.4)";\n',
         '            setTimeout(() => { cell.style.backgroundColor = ""; }, 300);\n',
@@ -330,16 +335,16 @@ script_javascript(StatoGioco, RuoloUmano, Turno) -->
         '    }\n',
         '}\n\n',
 
-        /* --- ANIMAZIONE INTELLIGENZA ARTIFICIALE --- */
+        /* --- INTELLIGENZA ARTIFICIALE CON TIMELINE ORDINATA --- */
         'if (statoGioco === "calcolo_ai") {\n',
-        '    setTimeout(() => {\n',
-        '        fetch("/trigger_ai").then(response => response.text()).then(res => {\n',
+        '    setTimeout(async () => {\n',
+        '        try {\n',
+        '            let res = await fetch("/trigger_ai").then(r => r.text());\n',
         '            if (res.includes(",")) {\n',
-        '                /* Il server ha risposto con FX,FY,TX,TY */\n',
         '                let parts = res.trim().split(",");\n',
-        '                let p0 = parts[0], p1 = parts[1], p2 = parts[2], p3 = parts[3];\n',
-        '                let oldCell = document.getElementById("c_" + p0 + "_" + p1);\n',
-        '                let targetCell = document.getElementById("c_" + p2 + "_" + p3);\n',
+        '                let oldCell = document.getElementById("c_" + parts[0] + "_" + parts[1]);\n',
+        '                let targetCell = document.getElementById("c_" + parts[2] + "_" + parts[3]);\n',
+        '                \n',
         '                if (oldCell && targetCell) {\n',
         '                    let piece = oldCell.querySelector(".piece");\n',
         '                    if (piece) {\n',
@@ -347,23 +352,33 @@ script_javascript(StatoGioco, RuoloUmano, Turno) -->
         '                        let r2 = targetCell.getBoundingClientRect();\n',
         '                        let dx = r2.left - r1.left + (r2.width - r1.width)/2;\n',
         '                        let dy = r2.top - r1.top + (r2.height - r1.height)/2;\n',
-        '                        /* Effetto sollevamento e volo */\n',
+        '                        \n',
+        '                        /* 1. Volo della pedina */\n',
         '                        piece.style.zIndex = "9999";\n',
-        '                        piece.style.transition = "transform 1s cubic-bezier(0.25, 1, 0.5, 1)";\n',
-        '                        piece.style.transform = "translate(" + dx + "px, " + (dy - 10) + "px) scale(1.15)";\n',
-        '                        /* Ricarica la pagina appena atterra */\n',
-        '                        setTimeout(() => { window.location.href = "/?t=" + Date.now(); }, 450);\n',
-        '                        return;\n',
+        '                        piece.style.transition = "transform 0.5s cubic-bezier(0.25, 1, 0.5, 1)";\n',
+        '                        piece.style.transform = `translate(${dx}px, ${dy - 15}px) scale(1.15)`;\n',
+        '                        \n',
+        '                        await sleep(500);\n',
+        '                        \n',
+        '                        /* 2. Impatto (Si abbassa e fa capire la destinazione) */\n',
+        '                        piece.style.transition = "none";\n',
+        '                        piece.style.transform = "";\n',
+        '                        targetCell.appendChild(piece);\n',
+        '                        piece.style.zIndex = "";\n',
+        '                        \n',
+        '                        /* 3. Pausa di percezione prima del reload */\n',
+        '                        await sleep(400);\n',
         '                    }\n',
         '                }\n',
         '            }\n',
-        '            /* Se manca l animazione o c è un errore, ricarica subito */\n',
+        '            /* 4. Aggiornamento Globale */\n',
         '            window.location.href = "/?t=" + Date.now();\n',
-        '        });\n',
-        '    }, 50);\n',
+        '        } catch(e) {\n',
+        '            window.location.href = "/?t=" + Date.now();\n',
+        '        }\n',
+        '    }, 400);\n',
         '}\n'
     ])).
-
 renderizza_scacchiera(Pezzi) --> { kb:dimensione(N) }, html(table( \righe_scacchiera(1, N, Pezzi) )).
 
 righe_scacchiera(Y, MaxY, _) --> { Y > MaxY }, !.

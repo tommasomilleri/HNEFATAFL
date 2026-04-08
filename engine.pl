@@ -66,11 +66,13 @@ cattura_direzione(X, Y, DX, DY, MiaFazione, PezziIn, PezziOut) :-
     ( select(pezzo(soldato, Nemico, Nx, Ny), PezziIn, Resto) ->
         Ox is Nx + DX, Oy is Ny + DY,           
         % REGOLA DI COPENHAGEN: Una casella speciale fa da incudine SOLO SE È VUOTA!
+        (
         ( member(pezzo(_, MiaFazione, Ox, Oy), PezziIn) ; 
           (casella_speciale(Ox, Oy), \+ member(pezzo(_, _, Ox, Oy), PezziIn)) 
         ) ->
             PezziOut = Resto 
         ; PezziOut = PezziIn 
+        )
     ; PezziOut = PezziIn     
     ).
 
