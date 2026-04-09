@@ -1,7 +1,5 @@
-% =========================================================
-% MODULO: kb.pl
-% Scopo: Rappresentazione dello stato e regole spaziali base
-% =========================================================
+
+% Rappresentazione dello stato e regole spaziali base
 
 :- module(kb, [dimensione/1, trono/2, stato_iniziale/1]).
 
