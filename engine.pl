@@ -1,50 +1,53 @@
 % =========================================================
-% MODULO: engine.pl (TABLUT COPENHAGEN 9x9 - ALTA VELOCITA')
-% Scopo: Regole di movimento, Catture storiche e Vittoria
+% Regole di movimento, Catture storiche e Vittoria
 % =========================================================
 
-:- module(engine, [mossa_legale/5, applica_mossa/6, vittoria/2]).
-:- use_module(kb).
+:- module(engine, [mossa_legale/5, applica_mossa/6, vittoria/2]). % module dichiara che questo file si chama engine. tra parentesi graffe i predicati pubblici con aritá. 
+:- use_module(kb). %use_module per importare i predicati da kb.pl. 
 
-% --- 1. VALIDAZIONE MOSSA ---
+% VALIDAZIONE MOSSA (Posso prendere pezzo da X0,Y0 e metterlo in X1,Y1? Vero/Falso) ---
 mossa_legale(X0, Y0, X1, Y1, Pezzi) :-
-    member(pezzo(Tipo, _Fazione, X0, Y0), Pezzi),
+    member(pezzo(Tipo, _Fazione, X0, Y0), Pezzi), %
     kb:dimensione(Max),
     between(1, Max, X1), between(1, Max, Y1),
     mossa_ortogonale(X0, Y0, X1, Y1),
     \+ member(pezzo(_, _, X1, Y1), Pezzi), 
     % REGOLA: Solo il Re può fermarsi sul trono o negli angoli
-    (Tipo \= re -> \+ casella_speciale(X1, Y1) ; true),
+    (Tipo \= re -> \+ casella_speciale(X1, Y1) ; true), %se tipo del pezzo è diverso da re allora controlla che la destinazione NON (\+) sia una casella speciale, altrimenti (;) se é un re, restituisce true.
     % Verifica rapida ostacoli
     percorso_libero(X0, Y0, X1, Y1, Pezzi).
 
 mossa_ortogonale(X0, Y, X1, Y) :- X0 \= X1.
 mossa_ortogonale(X, Y0, X, Y1) :- Y0 \= Y1.
 
-% OTTIMIZZAZIONE CPU: Ricorsione pura al posto di forall/between (100x più veloce)
-percorso_libero(X0, Y, X1, Y, Pezzi) :- 
-    X0 \= X1, MinX is min(X0, X1) + 1, MaxX is max(X0, X1) - 1,
+% Ricorsione pura al posto di forall/between per passare da tempi di circa 30 s a poco piu di 1 s.
+percorso_libero(X0, Y, X1, Y, Pezzi) :- %percorso_libero orizzontale 
+    X0 \= X1, 
+    MinX is min(X0, X1) + 1, MaxX is max(X0, X1) - 1, %calcolo la casella di partenza esatta (MinX) e quella finale (MaxX), escludendo la pedina stessa.
     nessun_pezzo_x(MinX, MaxX, Y, Pezzi).
-percorso_libero(X, Y0, X, Y1, Pezzi) :- 
-    Y0 \= Y1, MinY is min(Y0, Y1) + 1, MaxY is max(Y0, Y1) - 1,
+percorso_libero(X, Y0, X, Y1, Pezzi) :- %percorso_libero verticale
+    Y0 \= Y1, 
+    MinY is min(Y0, Y1) + 1, %se parto dalla casella 2 devo controllare dalle 2+1=3 in avanti
+    MaxY is max(Y0, Y1) - 1, %se voglio arrivare alla 8 devo controllare fino alla 8-1=7
     nessun_pezzo_y(MinY, MaxY, X, Pezzi).
 
-nessun_pezzo_x(Min, Max, _, _) :- Min > Max, !.
+nessun_pezzo_x(Min, Max, _, _) :- %se movimento ha successo non mi importa su che Y ero e come era fatta la scacchiera.
+Min > Max, !. %se Min ha superato la meta Max, si ferma e restituisce true (la via é libera).
 nessun_pezzo_x(Min, Max, Y, Pezzi) :- 
-    \+ member(pezzo(_, _, Min, Y), Pezzi),
-    Next is Min + 1, nessun_pezzo_x(Next, Max, Y, Pezzi).
+\+ member(pezzo(_, _, Min, Y), Pezzi), %controlla che non ci sia un pezzo in quella casella (Min, Y) e 
+    Next is Min + 1, nessun_pezzo_x(Next, Max, Y, Pezzi). %aggiunge +1 al contatore Min per controllare la casella successiva, fino a raggiungere Max.
 
 nessun_pezzo_y(Min, Max, _, _) :- Min > Max, !.
 nessun_pezzo_y(Min, Max, X, Pezzi) :- 
-    \+ member(pezzo(_, _, X, Min), Pezzi),
-    Next is Min + 1, nessun_pezzo_y(Next, Max, X, Pezzi).
+\+ member(pezzo(_, _, X, Min), Pezzi), %controllo che non ci sia un pezzo (non interessa di che fazione appartenga))
+    Next is Min + 1, nessun_pezzo_y(Next, Max, X, Pezzi). %va avanti fino a raggiungere Max, se non trova pezzi restituisce true (la via é libera).
 
-% Definiamo Trono e Angoli
+% Definiamo Trono e Angoli attraverso FACTS (fatti)
 casella_speciale(5, 5). % Trono
 casella_speciale(1, 1). casella_speciale(1, 9).
 casella_speciale(9, 1). casella_speciale(9, 9).
 
-% --- 2. APPLICAZIONE MOSSA E CATTURE ---
+% APPLICAZIONE MOSSA E CATTURE ---
 applica_mossa(X0, Y0, X1, Y1, Pezzi, PezziFinali) :-
     select(pezzo(Tipo, Fazione, X0, Y0), Pezzi, Resto),
     PezziMossi = [pezzo(Tipo, Fazione, X1, Y1) | Resto],
@@ -59,6 +62,12 @@ applica_mossa(X0, Y0, X1, Y1, Pezzi, PezziFinali) :-
     cattura_re(Fazione, P4, PezziFinali).
 
 % Logica del Sandwich per i normali SOLDATI + BUG FIX "Trono Vuoto"
+% acronimi: - DX, DY = Direzione di movimento, 
+%           - Nx, Ny = Casella del Nemico, 
+%           - Ox, Oy = Casella Oltre il nemici (la potenziale incudine)
+
+
+
 cattura_direzione(X, Y, DX, DY, MiaFazione, PezziIn, PezziOut) :-
     Nx is X + DX, Ny is Y + DY,             
     avversario(MiaFazione, Nemico),
@@ -67,13 +76,13 @@ cattura_direzione(X, Y, DX, DY, MiaFazione, PezziIn, PezziOut) :-
         Ox is Nx + DX, Oy is Ny + DY,           
         % REGOLA DI COPENHAGEN: Una casella speciale fa da incudine SOLO SE È VUOTA!
         (
-        ( member(pezzo(_, MiaFazione, Ox, Oy), PezziIn) ; 
-          (casella_speciale(Ox, Oy), \+ member(pezzo(_, _, Ox, Oy), PezziIn)) 
-        ) ->
-            PezziOut = Resto 
-        ; PezziOut = PezziIn 
+        ( member(pezzo(_, MiaFazione, Ox, Oy), PezziIn) ; %controlla se nella casella oltre il nemico c'è un pezzo amico (cattura standard) oppure (;)...
+          (casella_speciale(Ox, Oy), \+ member(pezzo(_, _, Ox, Oy), PezziIn)) %...se è una casella speciale ma è VUOTA
+        ) -> %allora
+            PezziOut = Resto %la scelta è stata fatta, restituisco la lista dei pezzi senza il nemico catturato
+        ; PezziOut = PezziIn  % altriementi resituisco la lista originale
         )
-    ; PezziOut = PezziIn     
+    ; PezziOut = PezziIn 
     ).
 
 % LOGICA DI CATTURA DEL RE
