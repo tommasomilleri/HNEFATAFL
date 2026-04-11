@@ -27,17 +27,17 @@ calcola_mossa_ai(Pezzi, FazioneAI, Profondita, MossaScelta) :-
     % Chiamiamo un'altra funzione per trovare tutte le mosse legali.
     % La variabile 'MosseOrdinate' si riempirà con una lista di mosse
     % già classificate dalla migliore alla peggiore.
-    genera_mosse_ordinate(Pezzi, FazioneAI, MosseOrdinate),
+    genera_mosse_ordinate(Pezzi, FazioneAI, MosseOrdinate), %definita in riga 67 di questo file. 
     
     % \= significa "diverso da". Controlliamo che la lista non sia vuota ([]).
     % Se fosse vuota, Prolog si fermerebbe qui (fallimento).
     MosseOrdinate \= [], 
     
     % PASSO 2: BEAM SEARCH (Capitolo 10.4 della Dispensa)
-    % Il professore spiega che per rendere il problema "trattabile" si selezionano
+    % per rendere il problema "trattabile" si selezionano
     % solo i 'k' successori migliori. 
     % Qui k=8. Scartiamo tutte le altre mosse per non sovraccaricare la CPU.
-    prendi_primi(8, MosseOrdinate, MosseTop), 
+    prendi_primi(8, MosseOrdinate, MosseTop), % definita da riga 129 a 131
     
     % PASSO 3: FALLBACK MOVE (La mossa salvavita)
     % In Prolog, il simbolo '=' fa "pattern matching" (unificazione).
@@ -46,7 +46,7 @@ calcola_mossa_ai(Pezzi, FazioneAI, Profondita, MossaScelta) :-
     % Perché? Se l'IA si rende conto che PERDERÀ al 100% qualunque cosa faccia, 
     % la ricerca dell'albero fallisce. Avendo questa mossa di riserva, 
     % l'IA farà comunque un passo (il "meno peggio") invece di crashare il gioco.
-    MosseTop = [mossa(FallbackFX, FallbackFY, FallbackTX, FallbackTY, _) | _],
+    MosseTop = [mossa(FallbackFX, FallbackFY, FallbackTX, FallbackTY, _) | _], % "mossa(..., ..., ..., ..., ...)" é un funtore o termine composto. 
     
     % PASSO 4: Inizializzazione limiti Alpha-Beta
     % L'Alpha-Beta usa una "finestra" di valori.
@@ -57,37 +57,37 @@ calcola_mossa_ai(Pezzi, FazioneAI, Profondita, MossaScelta) :-
     
     % PASSO 5: Chiamata al ciclo radice.
     % Inizia a valutare le 8 mosse. MossaScelta uscirà da qui con il risultato definitivo.
-    valuta_radice(MosseTop, FazioneAI, Profondita, Alpha, Beta, -100000, mossa(FallbackFX, FallbackFY, FallbackTX, FallbackTY), MossaScelta, _Punteggio).
+    valuta_radice(MosseTop, FazioneAI, Profondita, Alpha, Beta, -100000, mossa(FallbackFX, FallbackFY, FallbackTX, FallbackTY), MossaScelta, _Punteggio). % definito in riga 145 e 148
 
 
 % =========================================================
 % 2. MOVE ORDERING (Ordine di Esplorazione - Cap. 11)
-% Il prof dice: "L'efficacia della potatura dipende dall'ordine... caso ottimale: i figli migliori esplorati per primi".
+% L'efficacia dell'Alpha-Beta dipende moltissimo dall'ordine in cui esploriamo le mosse.
 % =========================================================
 genera_mosse_ordinate(Pezzi, Fazione, MosseOrdinate) :-
     
-    % findall/3 è una funzione nativa di Prolog potentissima.
+    % findall/3 è una funzione nativa di Prolog.
     % Sintassi: findall(Oggetto_da_creare, Obiettivo_da_soddisfare, Lista_risultato).
     findall(
         Score-mossa(FX, FY, TX, TY, NP), % Crea un oggetto composto: Punteggio unito alla mossa con un '-'
         (
             % 1. Trova una mossa valida usando le regole del gioco (motore.pl)
-            % NP conterrà la scacchiera *dopo* che la mossa è stata fatta.
-            genera_mossa_valida(Pezzi, Fazione, FX, FY, TX, TY, NP),
+            % NP conterrà la scacchiera dopo che la mossa è stata fatta.
+            genera_mossa_valida(Pezzi, Fazione, FX, FY, TX, TY, NP), %definita in riga 288
             
             % 2. Fa una stima super-veloce di quanto è buona questa mossa (es. ho mangiato qualcuno?)
-            stima_veloce(NP, Fazione, BaseScore),
+            stima_veloce(NP, Fazione, BaseScore), %definito in riga 101
             
             % 3. Aggiunge un numero casuale da 0 a 5. Questo evita che l'IA giochi
-            % sempre l'esatta stessa partita se ripetuta. Crea "varietà" tattica.
+            % sempre la stessa partita se ripetuta. Crea varietà tattica.
             random_between(0, 5, Rand), 
-            Score is BaseScore + Rand % 'is' esegue operazioni matematiche in Prolog
+            Score is BaseScore + Rand % 'is' per operazioni matematiche
         ),
         MosseConScore % Il risultato va in questa variabile
     ),
     
     % keysort/2 prende liste di tipo Chiave-Valore (il nostro Score-mossa)
-    % e le ordina. Purtroppo Prolog le ordina in modo CRESCENTE (dal peggio al meglio).
+    % e le ordina. N.B.: Prolog le ordina in modo CRESCENTE (dalla peggiore alla migliore).
     keysort(MosseConScore, MosseAscendenti),
     
     % reverse/2 inverte la lista. Ora abbiamo le mosse con punteggio più alto IN CIMA.
@@ -96,11 +96,11 @@ genera_mosse_ordinate(Pezzi, Fazione, MosseOrdinate) :-
 
 % --- RICORSIONE IN CODA (Tail Recursion) PER ALTA VELOCITÀ ---
 % Prolog non ha cicli "for". Per contare i pezzi si usa la ricorsione. Non si é usato il findall perché è più lento (crea una lista intermedia). 
-% Qui invece lavoriamo direttamente sui numeri, senza liste per non sovraccaricare la RAM. 
+% Lavoriamo direttamente sui numeri, senza liste per non sovraccaricare la RAM. 
 % Contiamo i nostri pezzi e sottraiamo i pezzi nemici.
-stima_veloce(Pezzi, Fazione, Score) :-
+stima_veloce(Pezzi, Fazione, Score) :- % Pezzi e Fazione = Input; Score = Output
     conta_fazione(Pezzi, Fazione, Miei),
-    avversario(Fazione, Avv),
+    avversario(Fazione, Avv), %per come é stato definito il FACTS in riga 298 e 299 se la Fazione è attaccante, l'avversario é il difensore.
     conta_fazione(Pezzi, Avv, Suoi),
     Score is (Miei * 10) - (Suoi * 10). %si moltiplica per 10 per dare più peso alla differenza di pezzi. questo si chiama "Risoluzione" o "Granularità" dell'euristica. 
                                         %se prima di una mossa il randint da un numero alto (5) per una mossa che non mangia nessun pezzo (0)(mossa inutile o poco utile), 
@@ -112,11 +112,11 @@ stima_veloce(Pezzi, Fazione, Score) :-
 conta_fazione([], _, 0). %se la lista é vuota ([]) non mi interessa quale fazione sto contando (_), il risultato è 0.
 
 % Caso 1: La testa della lista ([Testa | Coda]) è un pezzo della NOSTRA fazione.
+%                   Fazione qui dentro  +  Fazione qui = Unificazione
 conta_fazione([pezzo(_, Fazione, _, _)|T], Fazione, N) :- % con [pezzo(_, Fazione, _, _) | T] Prolog estrae il primo pezzo. Vede che la Fazione di questo pezzo è esattamente uguale alla Fazione che stiamo cercando di contare. 
     !, %si usa Il Cut (!) per fermarlo perche ha trovato un pezzo e non proverá a leggere la Riga 3. 
-conta_fazione(T, Fazione, N1), %Prolog mette da parte il pezzo appena pescato e prende con il resto della coda T "ciclando" per contare quanti pezzi Neri ci sono. Il risultato dei pezzi lo memorizza in una variabile temporanea chiamata N1.
-N is N1 + 1. %Quando l'esplorazione del resto della Coda finisce, prendo il totale che ho trovato (N1), aggiungo 1 (il pezzo che avevo in mano io), e il totale definitivo diventa N.
-
+    conta_fazione(T, Fazione, N1), %Prolog mette da parte il pezzo appena pescato e prende con il resto della coda T "ciclando" per contare quanti pezzi Neri ci sono. Il risultato dei pezzi lo memorizza in una variabile temporanea chiamata N1.
+    N is N1 + 1. %Quando l'esplorazione del resto della Coda finisce, prendo il totale che ho trovato (N1), aggiungo 1 (il pezzo che avevo in mano io), e il totale definitivo diventa N.
 
 
 % Caso 2: Se la pedina NON è nostra, il Caso 1 fallisce e si arriva qui.
@@ -145,15 +145,15 @@ prendi_primi(N, [_Score-Mossa | T], [Mossa | R]) :- % Scarta lo Score, tiene la 
 valuta_radice([], _, _, _, _, ValoreTop, MossaTop, MossaTop, ValoreTop).
 
 % Analizziamo una mossa alla volta (estratta con [mossa | Resto])
-valuta_radice([mossa(FX, FY, TX, TY, NP) | Resto], FazioneAI, Prof, Alpha, Beta, ValoreTop, MossaTop, MossaFinale, ValoreFinale) :-
+valuta_radice([mossa(FX, FY, TX, TY, NP) | Resto], FazioneAI, Prof, Alpha, Beta, ValoreTop, MossaTop, MossaFinale, ValoreFinale) :- % NP = Nuovi Pezzi           FunzioneAi = con che fazione sta giocanto l'ai; Prof = Profondità; Alpha= minimo garantito (paracadute); Beta= massimo garantito (il tetto max); ValoreTop, MossaTop = record provvisori; MossaFinale, ValoreFinale = risultato definitivo.
     
-    % Lanciamo l'esplorazione futura! 'NP' è la scacchiera DOPO questa mossa.
+    % esplorazione futura. 'NP' (Nuovi Pezzi) è la scacchiera DOPO questa mossa.
     % Passiamo il turno all'avversario (TurnoAI = false).
-    alphabeta(NP, Prof, Alpha, Beta, FazioneAI, false, ValoreAttuale),
+    alphabeta(NP, Prof, Alpha, Beta, FazioneAI, false, ValoreAttuale), % definita da riga 178
     
     % Se il valore di questa mossa è MIGLIORE del massimo storico trovato finora...
     ( ValoreAttuale > ValoreTop ->
-        NuovoValoreTop = ValoreAttuale, NuovaMossaTop = mossa(FX, FY, TX, TY)
+        NuovoValoreTop = ValoreAttuale, NuovaMossaTop = mossa(FX, FY, TX, TY) %aggiorniamo i valori e memoriziamo le coordinate della mossa...
     ;   % Altrimenti, manteniamo i vecchi valori.
         NuovoValoreTop = ValoreTop, NuovaMossaTop = MossaTop
     ),
@@ -165,18 +165,18 @@ valuta_radice([mossa(FX, FY, TX, TY, NP) | Resto], FazioneAI, Prof, Alpha, Beta,
     % Se Alpha diventa maggiore o uguale a Beta, significa che in questo ramo 
     % stiamo ottenendo un punteggio che l'avversario non ci permetterà mai di raggiungere
     % (perché prima sceglierebbe un'altra strada). È inutile continuare a calcolare!
-    ( NuovoAlpha >= Beta ->
-        MossaFinale = NuovaMossaTop, ValoreFinale = NuovoValoreTop, ! % IL CUT(!) SVUOTA LA RAM
+    ( NuovoAlpha >= Beta -> %se la nuova mossa è così ottima da superare il limite massimo che il nemico ci concede (Beta), allora...
+        MossaFinale = NuovaMossaTop, ValoreFinale = NuovoValoreTop, ! % IL CUT(!) ferma la ricerca e restituisce la mossa e il punteggio attuale come risultato finale.
     ;   % Altrimenti, procediamo a valutare la prossima mossa nella lista (Resto)
         valuta_radice(Resto, FazioneAI, Prof, NuovoAlpha, Beta, NuovoValoreTop, NuovaMossaTop, MossaFinale, ValoreFinale)
     ).
 
 % --- ALGORITMO ALPHA-BETA RICORSIVO ---
 
-% CASI TERMINALI (FOGLIE DELL'ALBERO)
-% 1. La fazione dell'IA ha vinto in questo scenario futuro. Punteggio immenso.
+% CASI ESTREMI (FOGLIE DELL'ALBERO)
+% 1. La fazione dell'IA ha vinto in questo scenario futuro. Punteggio altissimo.
 alphabeta(Pezzi, _, _, _, FazioneAI, _, 100000) :- engine:vittoria(Pezzi, FazioneAI), !.
-% 2. L'avversario ha vinto. Punteggio orribile (-100000).
+% 2. L'avversario ha vinto. Punteggio bassissimo (-100000).
 alphabeta(Pezzi, _, _, _, FazioneAI, _, -100000) :- avversario(FazioneAI, Avv), engine:vittoria(Pezzi, Avv), !.
 
 % 3. CUTOFF (Cap. 12.1): Profondità arrivata a 0.
@@ -363,7 +363,7 @@ avversario(attaccante, difensore).
 
 
 
-/*
+ /*
 % =========================================================
 % MODULO: ai.pl (L'IA "GOD MODE" - PROFONDITÀ ESTREMA 7)
 % Tecniche: Alpha-Beta + Razor Beam Search + God-Tier Heuristic
