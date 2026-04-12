@@ -12,6 +12,7 @@ mossa_legale(X0, Y0, X1, Y1, Pezzi) :-
     between(1, Max, X1), between(1, Max, Y1),
     mossa_ortogonale(X0, Y0, X1, Y1),
     \+ member(pezzo(_, _, X1, Y1), Pezzi), 
+
     % REGOLA: Solo il Re può fermarsi sul trono o negli angoli
     (Tipo \= re -> \+ casella_speciale(X1, Y1) ; true), %se tipo del pezzo è diverso da re allora controlla che la destinazione NON (\+) sia una casella speciale, altrimenti (;) se é un re, restituisce true.
     % Verifica rapida ostacoli
@@ -69,20 +70,20 @@ applica_mossa(X0, Y0, X1, Y1, Pezzi, PezziFinali) :-
 
 
 cattura_direzione(X, Y, DX, DY, MiaFazione, PezziIn, PezziOut) :-
-    Nx is X + DX, Ny is Y + DY,             
-    avversario(MiaFazione, Nemico),
+    Nx is X + DX, Ny is Y + DY,%calcola le coordinate della cella adiacente nella direzionie di moviemento.
+    avversario(MiaFazione, Nemico), %chiede al database "avversario" chi è il nemico rispetto alla mia fazione
     % Lazy Evaluation: Calcola l'incudine SOLO se abbiamo trovato un nemico in mezzo (risparmia CPU)
-    ( select(pezzo(soldato, Nemico, Nx, Ny), PezziIn, Resto) ->
-        Ox is Nx + DX, Oy is Ny + DY,           
+( select(pezzo(soldato, Nemico, Nx, Ny), PezziIn, Resto) -> %cerca esattamente un pezzo che corrisponde al nemico e che sia un soldato, se lo trova restituisce Resto (la lista dei pezzi senza il nemico catturato) e continua sotto...
+        Ox is Nx + DX, Oy is Ny + DY, % calcolando le coordinate della casella oltre il nemico (la potenziale incudine)
         % REGOLA DI COPENHAGEN: Una casella speciale fa da incudine SOLO SE È VUOTA!
         (
         ( member(pezzo(_, MiaFazione, Ox, Oy), PezziIn) ; %controlla se nella casella oltre il nemico c'è un pezzo amico (cattura standard) oppure (;)...
           (casella_speciale(Ox, Oy), \+ member(pezzo(_, _, Ox, Oy), PezziIn)) %...se è una casella speciale ma è VUOTA
         ) -> %allora
-            PezziOut = Resto %la scelta è stata fatta, restituisco la lista dei pezzi senza il nemico catturato
-        ; PezziOut = PezziIn  % altriementi resituisco la lista originale
+            PezziOut = Resto %il nemico è stato catturato, restituisco la lista dei pezzi senza il nemico catturato
+        ; PezziOut = PezziIn  % se riga 82 fallisce, resituisco la lista originale
         )
-    ; PezziOut = PezziIn 
+    ; PezziOut = PezziIn %se riga 76 fallisce, restituisco la lista originale (non c'è un nemico da catturare in questa direzione)
     ).
 
 % LOGICA DI CATTURA DEL RE
@@ -90,7 +91,7 @@ cattura_re(difensore, Pezzi, Pezzi) :- !. % Il difensore non può auto-uccidere 
 cattura_re(attaccante, Pezzi, PezziFinali) :-
     ( member(pezzo(re, difensore, RX, RY), Pezzi),
       re_in_trappola(RX, RY, Pezzi) ->
-      select(pezzo(re, difensore, RX, RY), Pezzi, PezziFinali)
+      select(pezzo(re, difensore, RX, RY), Pezzi, PezziFinali) 
     ; PezziFinali = Pezzi
     ).
 
@@ -114,18 +115,18 @@ adiacente_al_trono(5, 4). adiacente_al_trono(5, 6).
 
 % Una casella adiacente al Re è "ostile" se è un Attaccante o una Casella Speciale VUOTA
 ostile_al_re(RX, RY, DX, DY, Pezzi) :-
-    NX is RX + DX, NY is RY + DY,
-    ( member(pezzo(_, attaccante, NX, NY), Pezzi) ; 
-      (casella_speciale(NX, NY), \+ member(pezzo(_, _, NX, NY), Pezzi)) 
+    NX is RX + DX, NY is RY + DY,%Rx si
+    ( member(pezzo(_, attaccante, NX, NY), Pezzi) ; %
+      (casella_speciale(NX, NY), \+ member(pezzo(_, _, NX, NY), Pezzi))%controlla se la casella adiacente è una casella speciale e che sia vuota (non ci sia un pezzo di nessuna fazione)
     ).
 
 avversario(difensore, attaccante).
 avversario(attaccante, difensore).
 
 % --- 3. CONDIZIONI DI VITTORIA ---
-vittoria(Pezzi, difensore) :-
-    member(pezzo(re, difensore, X, Y), Pezzi),
-    casella_speciale(X, Y), X \= 5, !. 
+vittoria(Pezzi, difensore) :- 
+    member(pezzo(re, difensore, X, Y), Pezzi), %
+    casella_speciale(X, Y), X \= 5, !.
 
-vittoria(Pezzi, attaccante) :-
+vittoria(Pezzi, attaccante) :- %é una vittoria per gli attaccanti se il re è stato catturato, ovvero se non è più presente nella lista dei pezzi.
     \+ member(pezzo(re, difensore, _, _), Pezzi), !.

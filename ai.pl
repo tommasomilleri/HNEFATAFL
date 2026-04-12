@@ -82,6 +82,10 @@ genera_mosse_ordinate(Pezzi, Fazione, MosseOrdinate) :-
             % sempre la stessa partita se ripetuta. Crea varietà tattica.
             random_between(0, 5, Rand), 
             Score is BaseScore + Rand % 'is' per operazioni matematiche
+            %se prima di una mossa il randint da un numero alto (5) per una mossa che non mangia nessun pezzo (0)(mossa inutile o poco utile), 
+                                        %lo Score is BaseScore + Rand sará alto (0+5) e l'IA preferirá questa mossa a una mossa piu utile (2) ma con Score piu basso se randint da un numero piccolo (0).
+                                        %se ia troppo stupida si puo aumentare il peso (Miei * 20) - (Suoi * 20) per dare piu importanza alla differenza di pezzi, e diminuire l'effetto del random (da 0 a 5) che diventa meno influente.
+
         ),
         MosseConScore % Il risultato va in questa variabile
     ),
@@ -93,7 +97,6 @@ genera_mosse_ordinate(Pezzi, Fazione, MosseOrdinate) :-
     % reverse/2 inverte la lista. Ora abbiamo le mosse con punteggio più alto IN CIMA.
     reverse(MosseAscendenti, MosseOrdinate).
 
-
 % --- RICORSIONE IN CODA (Tail Recursion) PER ALTA VELOCITÀ ---
 % Prolog non ha cicli "for". Per contare i pezzi si usa la ricorsione. Non si é usato il findall perché è più lento (crea una lista intermedia). 
 % Lavoriamo direttamente sui numeri, senza liste per non sovraccaricare la RAM. 
@@ -103,10 +106,7 @@ stima_veloce(Pezzi, Fazione, Score) :- % Pezzi e Fazione = Input; Score = Output
     avversario(Fazione, Avv), %per come é stato definito il FACTS in riga 298 e 299 se la Fazione è attaccante, l'avversario é il difensore.
     conta_fazione(Pezzi, Avv, Suoi),
     Score is (Miei * 10) - (Suoi * 10). %si moltiplica per 10 per dare più peso alla differenza di pezzi. questo si chiama "Risoluzione" o "Granularità" dell'euristica. 
-                                        %se prima di una mossa il randint da un numero alto (5) per una mossa che non mangia nessun pezzo (0)(mossa inutile o poco utile), 
-                                        %lo Score is BaseScore + Rand sará alto (0+5) e l'IA preferirá questa mossa a una mossa piu utile (2) ma con Score piu basso se randint da un numero piccolo (0).
-
-                                        %se ia troppo stupida si puo aumentare il peso (Miei * 20) - (Suoi * 20) per dare piu importanza alla differenza di pezzi, e diminuire l'effetto del random (da 0 a 5) che diventa meno influente.
+                                        
 
 % Caso base: se la lista è vuota ([]), il conteggio è 0.
 conta_fazione([], _, 0). %se la lista é vuota ([]) non mi interessa quale fazione sto contando (_), il risultato è 0.
@@ -125,13 +125,13 @@ conta_fazione([_|T], Fazione, N) :-
     conta_fazione(T, Fazione, N).
 
 % --- HELPER: BEAM SEARCH ---
+% :- !. : Esegui un Cut verde. Non scenderá a leggere le regole sottostanti.
 % Funzione ricorsiva che estrae solo i primi N elementi da una lista.
-prendi_primi(0, _, []) :- !. % Caso base 1: Ne ho presi 0, restituisco lista vuota.
-prendi_primi(_, [], []) :- !. % Caso base 2: La lista è finita prima di N, restituisco vuoto.
-prendi_primi(N, [_Score-Mossa | T], [Mossa | R]) :- % Scarta lo Score, tiene la Mossa, continua sulla coda.
+prendi_primi(0, _, []) :- !. % Se la funzione viene chiamata chiedendo 0 elementi, allora non mi interessa di quanto sia lunga o cosa ci sia nella lista, restituisco vuoto.
+prendi_primi(_, [], []) :- !. % Caso base 2: Se cerco ancora elementi (_) ma la lista di ingresso si è svuotata ([]), restituisco una lista vuota ([]) mettendo il "tappo" e mi fermo.
+prendi_primi(N, [_Score-Mossa | T], [Mossa | R]) :- % il simbolo '-' serve per creare una coppia Chiave-Valore. Splitta la coppia, scarta lo Score (-Score), tiene la Mossa, continua sulla coda.
     N > 0, N1 is N - 1,
     prendi_primi(N1, T, R).
-
 
 % =========================================================
 % 3. IL CUORE DELL'ALPHA-BETA PRUNING (Cap. 11)
@@ -174,13 +174,13 @@ valuta_radice([mossa(FX, FY, TX, TY, NP) | Resto], FazioneAI, Prof, Alpha, Beta,
 % --- ALGORITMO ALPHA-BETA RICORSIVO ---
 
 % CASI ESTREMI (FOGLIE DELL'ALBERO)
-% 1. La fazione dell'IA ha vinto in questo scenario futuro. Punteggio altissimo.
+% 1. La fazione dell'IA ha vinto (assegno 100000 all'output) in questo scenario futuro. Punteggio altissimo.
 alphabeta(Pezzi, _, _, _, FazioneAI, _, 100000) :- engine:vittoria(Pezzi, FazioneAI), !.
 % 2. L'avversario ha vinto. Punteggio bassissimo (-100000).
 alphabeta(Pezzi, _, _, _, FazioneAI, _, -100000) :- avversario(FazioneAI, Avv), engine:vittoria(Pezzi, Avv), !.
 
 % 3. CUTOFF (Cap. 12.1): Profondità arrivata a 0.
-% Non indaghiamo oltre nel futuro. Chiamiamo l'Euristica per dare un voto alla plancia attuale.
+% la profonditá é arrivata a 0 ma nessuno ha vinto, quindi valutiamo la posizione con l'euristica.
 alphabeta(Pezzi, 0, _, _, FazioneAI, _, Punteggio) :- !, euristica(Pezzi, FazioneAI, Punteggio).
 
 
@@ -189,11 +189,11 @@ alphabeta(Pezzi, Profondita, Alpha, Beta, FazioneAI, true, PunteggioMassimo) :-
     Profondita > 0,
     genera_mosse_ordinate(Pezzi, FazioneAI, MosseOrdinate),
     prendi_primi(8, MosseOrdinate, Figli), 
-    % Se non abbiamo mosse disponibili, siamo bloccati (è una sconfitta)
-    ( Figli = [] -> PunteggioMassimo = -100000 
+
+    ( Figli = [] -> PunteggioMassimo = -100000     % Se non abbiamo mosse disponibili (Figli=[]), l'ia é bloccata (è una sconfitta)
     ; NuovaProf is Profondita - 1, % Scendiamo di un livello nel futuro
-      % Chiamiamo la funzione che cicla su questi figli
-      valuta_max(Figli, FazioneAI, NuovaProf, Alpha, Beta, -100000, PunteggioMassimo)
+      % Chiamo la funzione che cicla su questi figli
+      valuta_max(Figli, FazioneAI, NuovaProf, Alpha, Beta, -100000, PunteggioMassimo) % assegno -100000 come punteggio minimo iniziale cosi che il resto sembri migliore.
     ).
 
 % NODO MIN: È il turno dell'Avversario (TurnoAI = false). L'obiettivo è MINIMIZZARE.
