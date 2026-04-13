@@ -1,5 +1,9 @@
+% usare %.* per togliere tutti i commenti.
 
-% Concetti: Alpha-Beta Pruning, Beam Search (k=8), Move Ordering
+
+
+
+% Concetti: Alpha-Beta Pruning, Teorema di McCarty (non è necessario valutare ogni singolo nodo per prendere la decisione ottimale), Beam Search (k=8), Move Ordering
 
 
 % La direttiva 'module' dice a Prolog il nome di questo file ('ai') 
@@ -46,7 +50,7 @@ calcola_mossa_ai(Pezzi, FazioneAI, Profondita, MossaScelta) :-
     % Perché? Se l'IA si rende conto che PERDERÀ al 100% qualunque cosa faccia, 
     % la ricerca dell'albero fallisce. Avendo questa mossa di riserva, 
     % l'IA farà comunque un passo (il "meno peggio") invece di crashare il gioco.
-    MosseTop = [mossa(FallbackFX, FallbackFY, FallbackTX, FallbackTY, _) | _], % "mossa(..., ..., ..., ..., ...)" é un funtore o termine composto. 
+    MosseTop = [mossa(FallbackFX, FallbackFY, FallbackTX, FallbackTY, _NuoviPezziIgnorati) | _MosseRimanentiIgnorate], % "mossa(..., ..., ..., ..., ...)" é un funtore o termine composto. 
     
     % PASSO 4: Inizializzazione limiti Alpha-Beta
     % L'Alpha-Beta usa una "finestra" di valori.
@@ -101,19 +105,18 @@ genera_mosse_ordinate(Pezzi, Fazione, MosseOrdinate) :-
 % Prolog non ha cicli "for". Per contare i pezzi si usa la ricorsione. Non si é usato il findall perché è più lento (crea una lista intermedia). 
 % Lavoriamo direttamente sui numeri, senza liste per non sovraccaricare la RAM. 
 % Contiamo i nostri pezzi e sottraiamo i pezzi nemici.
-stima_veloce(Pezzi, Fazione, Score) :- % Pezzi e Fazione = Input; Score = Output
+stima_veloce(Pezzi, Fazione, Score) :- % Pezzi e Fazione = Input oppure Stati del Mondo; Score = Output oppure codizione per cui la funzione da TRUE // stima_veloce > 0 = IA in vantaggio; stima_veloce < 0 = IA in svantaggio; stima_veloce = 0 = parità.
     conta_fazione(Pezzi, Fazione, Miei),
     avversario(Fazione, Avv), %per come é stato definito il FACTS in riga 298 e 299 se la Fazione è attaccante, l'avversario é il difensore.
     conta_fazione(Pezzi, Avv, Suoi),
     Score is (Miei * 10) - (Suoi * 10). %si moltiplica per 10 per dare più peso alla differenza di pezzi. questo si chiama "Risoluzione" o "Granularità" dell'euristica. 
                                         
-
 % Caso base: se la lista è vuota ([]), il conteggio è 0.
-conta_fazione([], _, 0). %se la lista é vuota ([]) non mi interessa quale fazione sto contando (_), il risultato è 0.
+conta_fazione([], _QualsiasiFazione, 0). %se la lista é vuota ([]) non mi interessa quale fazione sto contando (_), il risultato è 0.
 
 % Caso 1: La testa della lista ([Testa | Coda]) è un pezzo della NOSTRA fazione.
 %                   Fazione qui dentro  +  Fazione qui = Unificazione
-conta_fazione([pezzo(_, Fazione, _, _)|T], Fazione, N) :- % con [pezzo(_, Fazione, _, _) | T] Prolog estrae il primo pezzo. Vede che la Fazione di questo pezzo è esattamente uguale alla Fazione che stiamo cercando di contare. 
+conta_fazione([pezzo(_TipoPezzo, Fazione, _X, _Y)|T], Fazione, N) :- % con [pezzo(_, Fazione, _, _) | T] Prolog estrae il primo pezzo. Vede che la Fazione di questo pezzo è esattamente uguale alla Fazione che stiamo cercando di contare. 
     !, %si usa Il Cut (!) per fermarlo perche ha trovato un pezzo e non proverá a leggere la Riga 3. 
     conta_fazione(T, Fazione, N1), %Prolog mette da parte il pezzo appena pescato e prende con il resto della coda T "ciclando" per contare quanti pezzi Neri ci sono. Il risultato dei pezzi lo memorizza in una variabile temporanea chiamata N1.
     N is N1 + 1. %Quando l'esplorazione del resto della Coda finisce, prendo il totale che ho trovato (N1), aggiungo 1 (il pezzo che avevo in mano io), e il totale definitivo diventa N.
@@ -121,14 +124,14 @@ conta_fazione([pezzo(_, Fazione, _, _)|T], Fazione, N) :- % con [pezzo(_, Fazion
 
 % Caso 2: Se la pedina NON è nostra, il Caso 1 fallisce e si arriva qui.
 % Richiama se stessa sulla coda (T) senza fare +1.
-conta_fazione([_|T], Fazione, N) :- 
+conta_fazione([_PezzoDaScartare|T], Fazione, N) :- 
     conta_fazione(T, Fazione, N).
 
 % --- HELPER: BEAM SEARCH ---
 % :- !. : Esegui un Cut verde. Non scenderá a leggere le regole sottostanti.
 % Funzione ricorsiva che estrae solo i primi N elementi da una lista.
-prendi_primi(0, _, []) :- !. % Se la funzione viene chiamata chiedendo 0 elementi, allora non mi interessa di quanto sia lunga o cosa ci sia nella lista, restituisco vuoto.
-prendi_primi(_, [], []) :- !. % Caso base 2: Se cerco ancora elementi (_) ma la lista di ingresso si è svuotata ([]), restituisco una lista vuota ([]) mettendo il "tappo" e mi fermo.
+prendi_primi(0, _ListaDiIngresso, []) :- !. % Se la funzione viene chiamata chiedendo 0 elementi, allora non mi interessa di quanto sia lunga o cosa ci sia nella lista, restituisco vuoto.
+prendi_primi(_ElementiRimasti, [], []) :- !. % Caso base 2: Se cerco ancora elementi (_) ma la lista di ingresso si è svuotata ([]), restituisco una lista vuota ([]) mettendo il "tappo" e mi fermo.
 prendi_primi(N, [_Score-Mossa | T], [Mossa | R]) :- % il simbolo '-' serve per creare una coppia Chiave-Valore. Splitta la coppia, scarta lo Score (-Score), tiene la Mossa, continua sulla coda.
     N > 0, N1 is N - 1,
     prendi_primi(N1, T, R).
@@ -142,10 +145,10 @@ prendi_primi(N, [_Score-Mossa | T], [Mossa | R]) :- % il simbolo '-' serve per c
 
 % --- CICLO DELLA RADICE ---
 % Caso base: la lista delle mosse da valutare è vuota. Restituiamo il ValoreTop trovato finora.
-valuta_radice([], _, _, _, _, ValoreTop, MossaTop, MossaTop, ValoreTop).
+valuta_radice([], _FazioneAI, _Prof, _Alpha, _Beta, ValoreTop, MossaTop, MossaTop, ValoreTop).
 
 % Analizziamo una mossa alla volta (estratta con [mossa | Resto])
-valuta_radice([mossa(FX, FY, TX, TY, NP) | Resto], FazioneAI, Prof, Alpha, Beta, ValoreTop, MossaTop, MossaFinale, ValoreFinale) :- % NP = Nuovi Pezzi           FunzioneAi = con che fazione sta giocanto l'ai; Prof = Profondità; Alpha= minimo garantito (paracadute); Beta= massimo garantito (il tetto max); ValoreTop, MossaTop = record provvisori; MossaFinale, ValoreFinale = risultato definitivo.
+valuta_radice([mossa(FX, FY, TX, TY, NP) | Resto], FazioneAI, Prof, Alpha, Beta, ValoreTop, MossaTop, MossaFinale, ValoreFinale) :- % NP = Nuovi Pezzi          FunzioneAi = con che fazione sta giocanto l'ai; Prof = Profondità; Alpha= minimo garantito (paracadute); Beta= massimo garantito (il tetto max); ValoreTop, MossaTop = record provvisori; MossaFinale, ValoreFinale = risultato definitivo.
     
     % esplorazione futura. 'NP' (Nuovi Pezzi) è la scacchiera DOPO questa mossa.
     % Passiamo il turno all'avversario (TurnoAI = false).
@@ -175,13 +178,13 @@ valuta_radice([mossa(FX, FY, TX, TY, NP) | Resto], FazioneAI, Prof, Alpha, Beta,
 
 % CASI ESTREMI (FOGLIE DELL'ALBERO)
 % 1. La fazione dell'IA ha vinto (assegno 100000 all'output) in questo scenario futuro. Punteggio altissimo.
-alphabeta(Pezzi, _, _, _, FazioneAI, _, 100000) :- engine:vittoria(Pezzi, FazioneAI), !.
+alphabeta(Pezzi, _Prof, _Alpha, _Beta, FazioneAI, _TurnoAI, 100000) :- engine:vittoria(Pezzi, FazioneAI), !. %in italiano sarebbe SE l'engine mi conferma che la scacchiera attuale è uno stato di vittoria, ALLORA io dichiaro che questo ramo ha avuto successo (True) E COME PREMIO unifico istantaneamente il valore 100.000 dentro la variabile di output che mi hai passato."
 % 2. L'avversario ha vinto. Punteggio bassissimo (-100000).
-alphabeta(Pezzi, _, _, _, FazioneAI, _, -100000) :- avversario(FazioneAI, Avv), engine:vittoria(Pezzi, Avv), !.
+alphabeta(Pezzi, _Prof, _Alpha, _Beta, FazioneAI, _TurnoAI, -100000) :- avversario(FazioneAI, Avv), engine:vittoria(Pezzi, Avv), !.
 
 % 3. CUTOFF (Cap. 12.1): Profondità arrivata a 0.
 % la profonditá é arrivata a 0 ma nessuno ha vinto, quindi valutiamo la posizione con l'euristica.
-alphabeta(Pezzi, 0, _, _, FazioneAI, _, Punteggio) :- !, euristica(Pezzi, FazioneAI, Punteggio).
+alphabeta(Pezzi, 0, _Alpha, _Beta, FazioneAI, _TurnoAI, Punteggio) :- !, euristica(Pezzi, FazioneAI, Punteggio).
 
 
 % NODO MAX: È il turno della nostra IA (TurnoAI = true). L'obiettivo è MASSIMIZZARE.
@@ -209,8 +212,8 @@ alphabeta(Pezzi, Profondita, Alpha, Beta, FazioneAI, false, PunteggioMinimo) :-
     ).
 
 % --- Iterazione dei figli per trovare il MASSIMO ---
-valuta_max([], _, _, _, _, Valore, Valore). % Lista vuota: restituisce il Valore accumulato
-valuta_max([mossa(_,_,_,_,NP) | Resto], FazioneAI, Prof, Alpha, Beta, ValoreAttuale, ValoreFinale) :- %NP = Nuovi Pezzi (nuova configurazione dopo la mossa)
+valuta_max([], _FazioneAI, _Prof, _Alpha, _Beta, Valore, Valore). % Lista vuota: restituisce il Valore accumulato
+valuta_max([mossa(_FX,_FY,_TX,_TY,NP) | Resto], FazioneAI, Prof, Alpha, Beta, ValoreAttuale, ValoreFinale) :- %NP = Nuovi Pezzi (nuova configurazione dopo la mossa)
     % Valuta il figlio passando il turno all'avversario (false)
     alphabeta(NP, Prof, Alpha, Beta, FazioneAI, false, ValoreFiglio), %valuta_max dice a alphabeta di andare nel futuro durante il turno nemico (False) e valutare quella configurazione. ValoreFiglio è il punteggio che otteniamo da quella configurazione futura.
     % max/2 tiene il numero più alto
@@ -222,8 +225,8 @@ valuta_max([mossa(_,_,_,_,NP) | Resto], FazioneAI, Prof, Alpha, Beta, ValoreAttu
     ).
 
 % --- Iterazione dei figli per trovare il MINIMO ---
-valuta_min([], _, _, _, _, Valore, Valore).
-valuta_min([mossa(_,_,_,_,NP) | Resto], FazioneAI, Prof, Alpha, Beta, ValoreAttuale, ValoreFinale) :-
+valuta_min([], _FazioneAI, _Prof, _Alpha, _Beta, Valore, Valore).
+valuta_min([mossa(_FX,_FY,_TX,_TY,NP) | Resto], FazioneAI, Prof, Alpha, Beta, ValoreAttuale, ValoreFinale) :-
     % Valuta il figlio passando il turno a noi (true)
     alphabeta(NP, Prof, Alpha, Beta, FazioneAI, true, ValoreFiglio),
     % min/2 tiene il numero più basso (quello che fa più male alla nostra IA)
@@ -297,7 +300,6 @@ genera_mossa_valida(Pezzi, Fazione, FX, FY, TX, TY, NuoviPezzi) :- %FX, FY = Fro
 % Definizione con FACTS delle fazioni.
 avversario(difensore, attaccante). %avversario del difensore è l'attaccante
 avversario(attaccante, difensore).
-
 
 
 

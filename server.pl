@@ -9,11 +9,12 @@
 :- use_module(library(http/html_write)).
 :- use_module(library(http/http_parameters)).
 :- use_module(library(www_browser)). 
+:- use_module(library(random)). % AGGIUNTA LIBRERIA PER LA SELEZIONE CASUALE
 :- use_module(kb).
 :- use_module(engine).
 :- use_module(ai).
 
-% AGGIUNTO 'turno_attuale/1' ALLA MEMORIA DINAMICA
+% MEMORIA DINAMICA
 :- dynamic stato_corrente/1, ruolo_umano/1, ruolo_ai/1, stato_gioco/1, turno_attuale/1.
 
 % --- ROTTE DEL SERVER ---
@@ -68,7 +69,6 @@ avvia_server :-
     writeln('==========================================='),
     writeln('🚀 MOTORE HNEFATAFL 3D AVVIATO CON SUCCESSO!'),
     writeln('👉 Il browser si sta aprendo automaticamente...'),
-    writeln('🔗 (Link manuale: http://localhost:8080 )'),
     writeln('==========================================='),
     catch(www_open_url('http://localhost:8080'), _, true).
 
@@ -77,11 +77,23 @@ ferma_server :- http_stop_server(8080, _), writeln('🛑 Server fermato.').
 resetta_partita :-
     kb:stato_iniziale(Pezzi),
     retractall(stato_corrente(_)), assertz(stato_corrente(Pezzi)),
-    retractall(ruolo_umano(_)),    assertz(ruolo_umano(sconosciuto)),
-    retractall(ruolo_ai(_)),       assertz(ruolo_ai(sconosciuto)),
-    retractall(stato_gioco(_)),    assertz(stato_gioco(turno_umano)),
-    % INIZIALIZZAZIONE TURNO: L'Attaccante (Nero) gioca sempre per primo
-    retractall(turno_attuale(_)),  assertz(turno_attuale(attaccante)).
+    
+    % --- ASSEGNAZIONE CASUALE FAZIONI ---
+    random_member(MioRuolo, [attaccante, difensore]),
+    ai:avversario(MioRuolo, RuoloIA),
+    
+    retractall(ruolo_umano(_)),    assertz(ruolo_umano(MioRuolo)),
+    retractall(ruolo_ai(_)),       assertz(ruolo_ai(RuoloIA)),
+    
+    % REGOLE HNEFATAFL: L'Attaccante muove sempre per primo
+    retractall(turno_attuale(_)),  assertz(turno_attuale(attaccante)),
+    
+    % Se la sorte ti ha dato il difensore, il gioco parte col turno dell'IA
+    ( MioRuolo = difensore ->
+        retractall(stato_gioco(_)), assertz(stato_gioco(calcolo_ai))
+    ; 
+        retractall(stato_gioco(_)), assertz(stato_gioco(turno_umano))
+    ).
 
 gestisci_reset(_Request) :- resetta_partita, format('Content-type: text/plain~n~nok').
 
@@ -194,9 +206,13 @@ pagina_principale(_Request) :-
             '),
             h1([style('margin-top: 15px; letter-spacing: 4px; margin-bottom: 5px; font-family: "Georgia", serif; color: #d1bfae; font-weight: normal; text-shadow: 2px 2px 5px #000;')], 'HNEFATAFL'),
             button([class('btn-reset'), onclick('fetch("/reset").then(()=>window.location.href = "/?t=" + Date.now())')], 'Nuova Battaglia'),
-            div([style('height: 20px;')], ''),
             
-            % ATTENZIONE: Ci deve essere SOLO QUESTO richiamo a \banner_stato, non uno fuori e uno dentro!
+            % MOSTRA IL RUOLO ASSEGNATO CASUALMENTE
+            div([style('color: #8c7b6b; font-size: 18px; font-family: "Georgia", serif; font-style: italic; margin-top: 10px; margin-bottom: 5px;')],
+                ['Tu guidi: ', b([style('text-transform: capitalize; color: #c4a47c;')], RuoloUmano)]
+            ),
+            
+            % CONTENITORE RIGIDO PER IL BANNER
             div([style('height: 60px; display: flex; flex-direction: column; justify-content: center; align-items: center; margin-bottom: 5px;')], 
                 \banner_stato(StatoGioco)
             ),
@@ -212,6 +228,7 @@ banner_stato(calcolo_ai) --> !, html(div([class('banner-ai'), style('margin: 0;'
 banner_stato(vittoria_attaccante) --> !, html(div([class('banner-loss'), style('margin: 0;')], 'VITTORIA! I Rossi hanno schiacciato il Re!')).
 banner_stato(vittoria_difensore) --> !, html(div([class('banner-win'), style('margin: 0;')], 'VITTORIA! Il Re Bianco e fuggito!')).
 banner_stato(_) --> html(''). % Fallback pulito senza div invisibili
+
 script_javascript(StatoGioco, RuoloUmano, Turno) -->
     { format(string(StatoStr), "~w", [StatoGioco]),
       format(string(RuoloStr), "~w", [RuoloUmano]),
@@ -379,6 +396,7 @@ script_javascript(StatoGioco, RuoloUmano, Turno) -->
         '    }, 400);\n',
         '}\n'
     ])).
+
 renderizza_scacchiera(Pezzi) --> { kb:dimensione(N) }, html(table( \righe_scacchiera(1, N, Pezzi) )).
 
 righe_scacchiera(Y, MaxY, _) --> { Y > MaxY }, !.
@@ -415,7 +433,6 @@ gestisci_mossa(Request) :-
     ruolo_umano(RuoloAttuale), 
     ( RuoloAttuale = sconosciuto ; RuoloAttuale = FazioneMossa ), 
     ( engine:mossa_legale(FX, FY, TX, TY, Pezzi) ->
-        imposta_ruoli_se_necessario(FazioneMossa), 
         engine:applica_mossa(FX, FY, TX, TY, Pezzi, NuoviPezzi),
         retractall(stato_corrente(_)), assertz(stato_corrente(NuoviPezzi)),
         
@@ -430,47 +447,13 @@ gestisci_mossa(Request) :-
         format('Content-type: text/plain~n~nok')
     ; format('Content-type: text/plain~n~nko') ).
 
-imposta_ruoli_se_necessario(FazioneMossa) :-
-    ruolo_umano(sconosciuto), !, retractall(ruolo_umano(_)), assertz(ruolo_umano(FazioneMossa)),
-    ai:avversario(FazioneMossa, Avv), retractall(ruolo_ai(_)), assertz(ruolo_ai(Avv)).
-imposta_ruoli_se_necessario(_).
-
 esegui_mossa_ai(_Request) :-
     catch(
         (
             stato_corrente(Pezzi), stato_gioco(calcolo_ai), ruolo_ai(FazioneAI), turno_attuale(FazioneAI),
             
-            % PROFONDITÀ A 2: Veloce e spietata!
+            % PROFONDITÀ A 3: Veloce e spietata!
             ( ai:calcola_mossa_ai(Pezzi, FazioneAI, 3, mossa(FX, FY, TX, TY)) ->
-                engine:applica_mossa(FX, FY, TX, TY, Pezzi, NuoviPezzi),
-                retractall(stato_corrente(_)), assertz(stato_corrente(NuoviPezzi)),
-                ai:avversario(FazioneAI, ProssimoTurno),
-                retractall(turno_attuale(_)), assertz(turno_attuale(ProssimoTurno)),
-                ( engine:vittoria(NuoviPezzi, Vincitore) ->
-                    (Vincitore = attaccante -> V = vittoria_attaccante ; V = vittoria_difensore),
-                    retractall(stato_gioco(_)), assertz(stato_gioco(V))
-                ; retractall(stato_gioco(_)), assertz(stato_gioco(turno_umano)) ),
-                
-                % INVIO COORDINATE AL JAVASCRIPT PER L'ANIMAZIONE!
-                format('Content-type: text/plain~n~n~w,~w,~w,~w', [FX, FY, TX, TY])
-                
-            ; retractall(stato_gioco(_)), assertz(stato_gioco(turno_umano)), format('Content-type: text/plain~n~nko_nessuna_mossa') )
-        ),
-        _Error,
-        (
-            % FAIL-SAFE DI EMERGENZA: Se l'IA crasha per qualsiasi motivo, 
-            % si sblocca lo stato, si evita il loop infinito e tocca all'umano!
-            retractall(stato_gioco(_)), assertz(stato_gioco(turno_umano)),
-            format('Content-type: text/plain~n~nko_server_error')
-        )
-    ).
-/*esegui_mossa_ai(_Request) :-
-    catch(
-        (
-            stato_corrente(Pezzi), stato_gioco(calcolo_ai), ruolo_ai(FazioneAI), turno_attuale(FazioneAI),
-            
-            % PROFONDITA' MASSIMA CONSENTITA: 7 (God Mode)
-            ( ai:calcola_mossa_ai(Pezzi, FazioneAI, 7, mossa(FX, FY, TX, TY)) ->
                 engine:applica_mossa(FX, FY, TX, TY, Pezzi, NuoviPezzi),
                 retractall(stato_corrente(_)), assertz(stato_corrente(NuoviPezzi)),
                 ai:avversario(FazioneAI, ProssimoTurno),
@@ -491,4 +474,4 @@ esegui_mossa_ai(_Request) :-
             retractall(stato_gioco(_)), assertz(stato_gioco(turno_umano)),
             format('Content-type: text/plain~n~nko_server_error')
         )
-    ).*/
+    ).
