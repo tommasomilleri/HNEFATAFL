@@ -1,7 +1,3 @@
-% =========================================================
-% Regole di movimento, Catture storiche e Vittoria
-% =========================================================
-
 :- module(engine, [mossa_legale/5, applica_mossa/6, vittoria/2]). % module dichiara che questo file si chama engine. tra parentesi graffe i predicati pubblici con aritá. 
 :- use_module(kb). %use_module per importare i predicati da kb.pl. 
 
@@ -52,7 +48,6 @@ casella_speciale(9, 1). casella_speciale(9, 9).
 applica_mossa(X0, Y0, X1, Y1, Pezzi, PezziFinali) :-
     select(pezzo(Tipo, Fazione, X0, Y0), Pezzi, Resto),
     PezziMossi = [pezzo(Tipo, Fazione, X1, Y1) | Resto],
-    
     % Controllo catture standard in 4 direzioni (Estremamente ottimizzato)
     cattura_direzione(X1, Y1, 0, -1, Fazione, PezziMossi, P1), % Nord
     cattura_direzione(X1, Y1, 0, 1, Fazione, P1, P2),          % Sud
@@ -85,7 +80,6 @@ cattura_direzione(X, Y, DX, DY, MiaFazione, PezziIn, PezziOut) :-
         )
     ; PezziOut = PezziIn %se riga 76 fallisce, restituisco la lista originale (non c'è un nemico da catturare in questa direzione)
     ).
-
 % LOGICA DI CATTURA DEL RE
 cattura_re(difensore, Pezzi, Pezzi) :- !. % Il difensore non può auto-uccidere il Re
 cattura_re(attaccante, Pezzi, PezziFinali) :-
@@ -94,17 +88,14 @@ cattura_re(attaccante, Pezzi, PezziFinali) :-
       select(pezzo(re, difensore, RX, RY), Pezzi, PezziFinali) 
     ; PezziFinali = Pezzi
     ).
-
 % Caso A: Re sul Trono (5,5) -> Richiede 4 nemici 
 re_in_trappola(5, 5, Pezzi) :- !,
     ostile_al_re(5, 5, 0, -1, Pezzi), ostile_al_re(5, 5, 0, 1, Pezzi),
     ostile_al_re(5, 5, -1, 0, Pezzi), ostile_al_re(5, 5, 1, 0, Pezzi).
-
 % Caso B: Re adiacente al Trono -> Richiede 3 nemici + 1 Trono (4 lati in totale)
 re_in_trappola(RX, RY, Pezzi) :- adiacente_al_trono(RX, RY), !,
     ostile_al_re(RX, RY, 0, -1, Pezzi), ostile_al_re(RX, RY, 0, 1, Pezzi),
     ostile_al_re(RX, RY, -1, 0, Pezzi), ostile_al_re(RX, RY, 1, 0, Pezzi).
-
 % Caso C: Re in campo aperto -> Sandwich a 2! (Basta chiuderlo su un asse)
 re_in_trappola(RX, RY, Pezzi) :-
     ( (ostile_al_re(RX, RY, 0, -1, Pezzi), ostile_al_re(RX, RY, 0, 1, Pezzi), !) ; % Panino Verticale
@@ -123,7 +114,7 @@ ostile_al_re(RX, RY, DX, DY, Pezzi) :-
 avversario(difensore, attaccante).
 avversario(attaccante, difensore).
 
-% --- 3. CONDIZIONI DI VITTORIA ---
+% --- CONDIZIONI DI VITTORIA ---
 vittoria(Pezzi, difensore) :- 
     member(pezzo(re, difensore, X, Y), Pezzi), %
     casella_speciale(X, Y), X \= 5, !.

@@ -1,11 +1,5 @@
 % usare %.* per togliere tutti i commenti.
 
-
-
-
-% Concetti: Alpha-Beta Pruning, Teorema di McCarty (non è necessario valutare ogni singolo nodo per prendere la decisione ottimale), Beam Search (k=8), Move Ordering
-
-
 % La direttiva 'module' dice a Prolog il nome di questo file ('ai') 
 % e quali funzioni possono essere chiamate (esportate) dagli altri file.
 % Arity: calcola_mossa_ai/4 significa che la funzione accetta 4 parametri.
@@ -16,15 +10,13 @@
 :- use_module(kb).
 :- use_module(library(random)). % Ci serve per generare numeri casuali
 
-% =========================================================
-% 1. ENTRY POINT (Punto di ingresso principale)
+
 % Questa è la funzione che server.pl chiama per far pensare il computer.
 % Parametri:
-% 1. Pezzi: La lista attuale di tutte le pedine in gioco.
-% 2. FazioneAI: Chi sta giocando (attaccante o difensore).
-% 3. Profondita: Quanti turni nel futuro vogliamo calcolare (es. 3).
-% 4. MossaScelta: La VARIABILE in cui salveremo il risultato finale.
-% =========================================================
+% Pezzi: La lista attuale di tutte le pedine in gioco.
+% FazioneAI: Chi sta giocando (attaccante o difensore).
+% Profondita: Quanti turni nel futuro vogliamo calcolare (es. 3).
+% MossaScelta: La VARIABILE in cui salveremo il risultato finale.
 calcola_mossa_ai(Pezzi, FazioneAI, Profondita, MossaScelta) :-
     
     % PASSO 1: Generazione e Ordinamento
@@ -44,10 +36,10 @@ calcola_mossa_ai(Pezzi, FazioneAI, Profondita, MossaScelta) :-
     prendi_primi(8, MosseOrdinate, MosseTop), % definita da riga 129 a 131
     
     % PASSO 3: FALLBACK MOVE (La mossa salvavita)
-    % In Prolog, il simbolo '=' fa "pattern matching" (unificazione).
+    % In Prolog, con '=', fa "pattern matching" (unificazione).
     % [Testa | Coda] divide una lista. Stiamo estraendo la primissima mossa 
     % da 'MosseTop' e salvando le sue coordinate (FallbackFX, ecc.).
-    % Perché? Se l'IA si rende conto che PERDERÀ al 100% qualunque cosa faccia, 
+    % Se l'IA si rende conto che PERDERÀ al 100% qualunque cosa faccia, 
     % la ricerca dell'albero fallisce. Avendo questa mossa di riserva, 
     % l'IA farà comunque un passo (il "meno peggio") invece di crashare il gioco.
     MosseTop = [mossa(FallbackFX, FallbackFY, FallbackTX, FallbackTY, _NuoviPezziIgnorati) | _MosseRimanentiIgnorate], % "mossa(..., ..., ..., ..., ...)" é un funtore o termine composto. 
@@ -65,7 +57,7 @@ calcola_mossa_ai(Pezzi, FazioneAI, Profondita, MossaScelta) :-
 
 
 % =========================================================
-% 2. MOVE ORDERING (Ordine di Esplorazione - Cap. 11)
+% MOVE ORDERING (Ordine di Esplorazione - Cap. 11 della Dispensa)
 % L'efficacia dell'Alpha-Beta dipende moltissimo dall'ordine in cui esploriamo le mosse.
 % =========================================================
 genera_mosse_ordinate(Pezzi, Fazione, MosseOrdinate) :-
@@ -137,7 +129,7 @@ prendi_primi(N, [_Score-Mossa | T], [Mossa | R]) :- % il simbolo '-' serve per c
     prendi_primi(N1, T, R).
 
 % =========================================================
-% 3. IL CUORE DELL'ALPHA-BETA PRUNING (Cap. 11)
+% ALPHA-BETA PRUNING (Cap. 11 della Dispensa)
 % In Prolog, gli algoritmi si dividono spesso in una "radice" che 
 % tiene traccia dell'azione compiuta, e un "ciclo interno" che valuta
 % solo i punteggi puri.
@@ -239,7 +231,7 @@ valuta_min([mossa(_FX,_FY,_TX,_TY,NP) | Resto], FazioneAI, Prof, Alpha, Beta, Va
 
 
 % =========================================================
-% 4. FUNZIONE DI VALUTAZIONE (EURISTICA) - Cap 12.1
+% FUNZIONE DI ASSEGNAZIONE DI UN PUNTEGGIO (EURISTICA) - Cap 12.1
 % È una formula matematica che dà un voto "umano" a una configurazione.
 % =========================================================
 euristica(Pezzi, Fazione, Punteggio) :-
@@ -284,7 +276,7 @@ euristica(Pezzi, Fazione, Punteggio) :-
     ).
 
 % =========================================================
-% 5. UTILITY DI COLLEGAMENTO AL MOTORE (engine.pl)
+% UTILITY DI COLLEGAMENTO AL MOTORE (engine.pl)
 % =========================================================
 % Questo predicato funge da ponte: prende un pezzo, prova le coordinate X, Y
 % e verifica con 'engine' se la mossa è fisicamente legale.
